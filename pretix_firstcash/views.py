@@ -1,17 +1,23 @@
 import hashlib
+import urllib.parse
 
 from cached_property import cached_property
 from django.http import Http404
 from django.shortcuts import redirect, render, get_object_or_404
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 
 from pretix.base.models import Order
 from pretix.multidomain.urlreverse import eventreverse
+
+from .payment import FirstcashMethod
 
 
 class FirstcashOrderView:
     def __init__(self):
         self.order = None
+        self.fm = None
 
     def dispatch(self, request, *args, **kwargs):
         try:
@@ -20,6 +26,7 @@ class FirstcashOrderView:
                 raise Http404('Unknown order')
             # todo: Vergleiche Order-Code und Self.payment.….code
             test = self.payment.payment_provider
+            self.fm = FirstcashMethod(self.order.event)
         except Order.DoesNotExist:
             # Do a hash comparison as well to harden timing attacks
             if 'abcdefghijklmnopq'.lower() == hashlib.sha1('abcdefghijklmnopq'.encode()).hexdigest():
@@ -46,19 +53,42 @@ class FirstcashOrderView:
             'secret': self.order.secret
         }) + ('?paid=yes' if self.order.status == Order.STATUS_PAID else ''))
 
+    def _handle_data(self, data):
+        response = self._parse_data(data)
+        if self.fm.check_hash(response):
+            self._set_status_code(response['Code'][0])
 
+    def _parse_data(self, data):
+        payload = self.fm.decrypt(data)
+        return urllib.parse.parse_qs(payload)
+
+    def _set_status_code(self, code):
+        if code == '00000000':
+            self.payment.confirm()
+        # todo: other codes / Status überprüfen (Failed, Success,…) Gibt es Pending o.ä.?
+        # payment success Funktionen
+        # Parameter in payment.info schicken, status setzen
+        # todo: self.payment.info = json.dumps(response)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class ReturnView(FirstcashOrderView, View):
     template_name = 'pretix_firstcash/return.html'
 
-    # Status überprüfen (Failed, Success,…) Gibt es Pending o.ä.?
-    # payment success Funktionen
-
-    # Parameter in payment.info schicken, status setzen
+    def post(self, request, *args, **kwargs):
+        if request.POST['Data']:
+            data = str(request.POST.get('Data'))
+            self._handle_data(data)
+        return self._redirect_to_order()
 
     def get(self, request, *args, **kwargs):
-        # return self._redirect_to_order()
-        return render(request, self.template_name)
+        return self._redirect_to_order()
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class NotifyView(ReturnView, FirstcashOrderView, View):
-    pass
+    def post(self, request, *args, **kwargs):
+        if request.POST['Data']:
+            data = str(request.POST.get('Data'))
+            self._handle_data(data)
+        print('notify', request.POST)

@@ -1,6 +1,7 @@
 import hashlib
-from base64 import b16encode
+from base64 import b16encode, b16decode
 from collections import OrderedDict
+from decimal import Decimal
 from urllib.parse import urlencode
 
 from Cryptodome.Hash import SHA256, HMAC
@@ -83,10 +84,17 @@ class FirstcashSettingsHolder(BasePaymentProvider):
         d.move_to_end('_enabled', last=False)
         return d
 
+    def payment_is_valid_session(self, request: HttpRequest) -> bool:
+        pass
+
+    def checkout_confirm_render(self, request, order: Order = None) -> str:
+        pass
+
 
 class FirstcashMethod(BasePaymentProvider):
     identifier = ''
     method = ''
+    verbose_name = ''
 
     def __init__(self, event: Event):
         super().__init__(event)
@@ -109,12 +117,32 @@ class FirstcashMethod(BasePaymentProvider):
         encrypted_text = cipher.encrypt(padded_text)
         return b16encode(encrypted_text).decode(), len(plaintext)
 
+    def decrypt(self, ciphertext):
+        key = self.settings.get('blowfish_password').encode('UTF-8')
+        cipher = Blowfish.new(key, Blowfish.MODE_ECB)
+        bs = Blowfish.block_size
+        ciphertext_bytes = b16decode(ciphertext)
+        decrypted_text = cipher.decrypt(ciphertext_bytes)
+        # todo: unpadded_text = Padding.unpad(decrypted_text, bs)  # maybe not necessary or even unhelpful
+        unpadded_text = decrypted_text
+        return unpadded_text.decode('UTF-8')
+
     def _calculate_mac(self, payment_id='', transaction_id='', payment_amount='', currency=''):
         pay_id = str(payment_id)
         trans_id = str(transaction_id)
         merchant_id = self.settings.get('merchant_id')
         amount = str(payment_amount)
         plain = (pay_id + '*' + trans_id + '*' + merchant_id + '*' + amount + '*' + currency).encode('UTF-8')
+        secret = self.settings.get('hmac_password').encode('UTF-8')
+        h = HMAC.new(secret, digestmod=SHA256)
+        h.update(plain)
+        return h.hexdigest()
+
+    # todo: find out if/how mac functions (above and below) can be combined as they nearly do the same
+    def _calculate_hmac(self, payment_id='', transaction_id='', status='', code=''):
+        merchant_id = self.settings.get('merchant_id')
+        cat = (str(payment_id) + '*' + str(transaction_id) + '*' + merchant_id + '*' + str(status) + '*' + str(code))
+        plain = cat.encode('UTF-8')
         secret = self.settings.get('hmac_password').encode('UTF-8')
         h = HMAC.new(secret, digestmod=SHA256)
         h.update(plain)
@@ -128,7 +156,7 @@ class FirstcashMethod(BasePaymentProvider):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
         return int(amount * 10 ** places)
 
-    def payment_form_render(self, request) -> str:
+    def payment_form_render(self, request: HttpRequest, total: Decimal, order: Order = None) -> str:
         template = get_template('pretix_firstcash/checkout_payment_form.html')
         return template.render()
 
@@ -159,7 +187,9 @@ class FirstcashMethod(BasePaymentProvider):
         data = urlencode({
             'MerchantID': self.settings.get('merchant_id'),
             'TransID': trans_id,
-            'OrderDesc': ref_nr,  # put in simulation mode by setting 'Test:0000' -> successful, 'Test:0305' -> failure
+            'OrderDesc': 'Test:0000',
+            # put in simulation mode by setting 'Test:0000' -> successful, 'Test:0305' -> failure
+            'MsgVer': '2.0',
             'RefNr': ref_nr,
             'Amount': self._decimal_to_int(payment.amount),
             'Currency': self.event.currency,
@@ -170,7 +200,7 @@ class FirstcashMethod(BasePaymentProvider):
                 transaction_id=trans_id,
                 payment_amount=str(self._decimal_to_int(payment.amount)),
                 currency=self.event.currency),
-            # todo 'Response': 'encrypted',
+            'Response': 'encrypt',
         })
         encrypted_data = self._encrypt(data)
         payload = urlencode({
@@ -181,8 +211,20 @@ class FirstcashMethod(BasePaymentProvider):
             # todo 'URLBack': redirect zurück zum shop, bei abbruchs
             # todo 'paymentTypes'
         })
-        # todo: payment.info füllen
+        # todo: payment.info = json.dumps(… self.firstcash_url + '?' + payload)
         return self.firstcash_url + '?' + payload
+
+    def check_hash(self, payload_parsed):
+        mid = payload_parsed['mid'][0]
+        mac = str(payload_parsed['MAC'][0]).lower().rstrip()
+        trans_id = payload_parsed['TransID'][0]
+        pay_id = payload_parsed['PayID'][0]
+        status = payload_parsed['Status'][0]
+        code = payload_parsed['Code'][0]
+        if mid == self.settings.get('merchant_id') and mac == self._calculate_hmac(pay_id, trans_id, status, code):
+            return True
+        else:
+            return False
 
 
 class FirstcashPayment(FirstcashMethod):
