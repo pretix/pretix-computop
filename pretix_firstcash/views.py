@@ -2,9 +2,11 @@ import hashlib
 import urllib.parse
 
 from cached_property import cached_property
-from django.http import Http404
+from django.contrib import messages
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render, get_object_or_404
 from django.utils.decorators import method_decorator
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
@@ -65,10 +67,9 @@ class FirstcashOrderView:
     def _set_status_code(self, code):
         if code == '00000000':
             self.payment.confirm()
-        # todo: other codes / Status überprüfen (Failed, Success,…) Gibt es Pending o.ä.?
-        # payment success Funktionen
-        # Parameter in payment.info schicken, status setzen
-        # todo: self.payment.info = json.dumps(response)
+        else:
+            messages.error(self.request, _('Your payment failed. Please try again.'))
+            self.payment.fail()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -92,3 +93,4 @@ class NotifyView(ReturnView, FirstcashOrderView, View):
             data = str(request.POST.get('Data'))
             self._handle_data(data)
         print('notify', request.POST)
+        return HttpResponse('[accepted]', status=200)

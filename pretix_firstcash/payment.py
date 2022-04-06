@@ -207,6 +207,7 @@ class FirstcashMethod(BasePaymentProvider):
             'MerchantID': self.settings.get('merchant_id'),
             'Len': encrypted_data[1],
             'Data': encrypted_data[0],
+            'URLBack': return_url,  # wrong redirect when encrypted, check back later if fixed in computop
             # todo 'Language':
             # todo 'URLBack': redirect zurück zum shop, bei abbruchs
             # todo 'paymentTypes'
