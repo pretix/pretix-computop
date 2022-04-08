@@ -1,4 +1,5 @@
 import hashlib
+import json
 from base64 import b16encode, b16decode
 from collections import OrderedDict
 from decimal import Decimal
@@ -123,6 +124,7 @@ class FirstcashMethod(BasePaymentProvider):
         bs = Blowfish.block_size
         ciphertext_bytes = b16decode(ciphertext)
         decrypted_text = cipher.decrypt(ciphertext_bytes)
+        # todo: handle errors (try catch?)
         # todo: unpadded_text = Padding.unpad(decrypted_text, bs)  # maybe not necessary or even unhelpful
         unpadded_text = decrypted_text
         return unpadded_text.decode('UTF-8')
@@ -184,7 +186,7 @@ class FirstcashMethod(BasePaymentProvider):
             'hash': hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
             'payment': payment.pk,
         })
-        data = urlencode({
+        data = {
             'MerchantID': self.settings.get('merchant_id'),
             'TransID': trans_id,
             'OrderDesc': 'Test:0000',
@@ -201,19 +203,23 @@ class FirstcashMethod(BasePaymentProvider):
                 payment_amount=str(self._decimal_to_int(payment.amount)),
                 currency=self.event.currency),
             'Response': 'encrypt',
-        })
-        encrypted_data = self._encrypt(data)
-        payload = urlencode({
+        }
+        encrypted_data = self._encrypt(urlencode(data))
+        payload = {
             'MerchantID': self.settings.get('merchant_id'),
             'Len': encrypted_data[1],
             'Data': encrypted_data[0],
             'URLBack': return_url,  # wrong redirect when encrypted, check back later if fixed in computop
             # todo 'Language':
-            # todo 'URLBack': redirect zurück zum shop, bei abbruchs
-            # todo 'paymentTypes'
+            # todo 'PayTypes:' / Add to settings for configuration or get from 1cs somehow?
+        }
+        payment.info = json.dumps({
+            'data': data,
+            'encrypted_data': encrypted_data,
+            'payload': payload,
         })
-        # todo: payment.info = json.dumps(… self.firstcash_url + '?' + payload)
-        return self.firstcash_url + '?' + payload
+        payment.save(update_fields=['info'])
+        return self.firstcash_url + '?' + urlencode(payload)
 
     def check_hash(self, payload_parsed):
         mid = payload_parsed['mid'][0]

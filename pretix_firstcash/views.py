@@ -1,4 +1,5 @@
 import hashlib
+import json
 import urllib.parse
 
 from cached_property import cached_property
@@ -26,7 +27,7 @@ class FirstcashOrderView:
             self.order = request.event.orders.get(code=kwargs['order'])
             if hashlib.sha1(self.order.secret.lower().encode()).hexdigest() != kwargs['hash'].lower():
                 raise Http404('Unknown order')
-            # todo: Vergleiche Order-Code und Self.payment.….code
+            # todo: Vergleiche Order-Code und Self.payment.….code (trans_id = payment.full_id)
             test = self.payment.payment_provider
             self.fm = FirstcashMethod(self.order.event)
         except Order.DoesNotExist:
@@ -58,18 +59,20 @@ class FirstcashOrderView:
     def _handle_data(self, data):
         response = self._parse_data(data)
         if self.fm.check_hash(response):
-            self._set_status_code(response['Code'][0])
+            self.payment.info = json.dumps({'request': self.payment.info, 'response': response})
+            self.payment.save(update_fields=['info'])  # todo: fix (payment not the correct object?)
+            self._set_status_code(response['Code'][0], response)
 
     def _parse_data(self, data):
         payload = self.fm.decrypt(data)
         return urllib.parse.parse_qs(payload)
 
-    def _set_status_code(self, code):
+    def _set_status_code(self, code, response):
         if code == '00000000':
             self.payment.confirm()
         else:
             messages.error(self.request, _('Your payment failed. Please try again.'))
-            self.payment.fail()
+            self.payment.fail(info={'request': self.payment.info, 'response': response})
 
 
 @method_decorator(csrf_exempt, name='dispatch')
