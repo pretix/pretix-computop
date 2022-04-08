@@ -9,21 +9,21 @@ __version__ = "1.0.0"
 
 
 class PluginApp(PluginConfig):
-    name = "pretix_firstcash"
-    verbose_name = "First Cash Solution payments for pretix"
+    name = "pretix_computop"
+    verbose_name = "Computop payments for pretix"
 
     class PretixPluginMeta:
-        name = gettext_lazy("First Cash Solution")
+        name = gettext_lazy("Computop")
         author = "Phin Wolkwitz"
-        description = gettext_lazy("This plugin allows you to use First Cash Solution as a payment provider")
+        description = gettext_lazy("This plugin allows you to use Computop-based payment providers")
         visible = True
         version = __version__
         category = "PAYMENT"
-        picture = "pretix_firstcash/logo.svg"
+        picture = "pretix_computop/logo.svg"
         compatibility = "pretix>=2.7.0"
 
     def ready(self):
         from . import signals  # NOQA
 
 
-default_app_config = "pretix_firstcash.PluginApp"
+default_app_config = "pretix_computop.PluginApp"

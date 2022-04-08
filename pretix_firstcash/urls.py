@@ -1,11 +1,3 @@
-from django.conf.urls import include, url
+from pretix_computop.urls import get_event_patterns
 
-from .views import NotifyView, ReturnView
-
-
-event_patterns = [
-    url(r'^pretix_firstcash/', include([
-        url(r'^return/(?P<order>[^/]+)/(?P<hash>[^/]+)/(?P<payment>[^/]+)/$', ReturnView.as_view(), name='return'),
-        url(r'^notify/(?P<order>[^/]+)/(?P<hash>[^/]+)/(?P<payment>[^/]+)/$', NotifyView.as_view(), name='notify'),
-    ])),
-]
+event_patterns = get_event_patterns('firstcash')

@@ -1,3 +1,3 @@
-recursive-include pretix_firstcash/static *
-recursive-include pretix_firstcash/templates *
-recursive-include pretix_firstcash/locale *
+recursive-include pretix_computop/static *
+recursive-include pretix_computop/templates *
+recursive-include pretix_computop/locale *

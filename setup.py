@@ -34,12 +34,13 @@ setup(
     author="Phin Wolkwitz",
     author_email="wolkwitz@rami.io",
     license="Apache",
-    install_requires=[],
+    install_requires=['pycryptodome==3.14.*'],
     packages=find_packages(exclude=["tests", "tests.*"]),
     include_package_data=True,
     cmdclass=cmdclass,
     entry_points="""
 [pretix.plugin]
+pretix_computop=pretix_computop:PretixPluginMeta
 pretix_firstcash=pretix_firstcash:PretixPluginMeta
 """,
 )
