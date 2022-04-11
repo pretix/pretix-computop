@@ -79,20 +79,19 @@ class ComputopMethod(BasePaymentProvider):
 
     @property
     def is_enabled(self) -> bool:
-        def is_enabled(self) -> bool:
-            if self.type == 'meta':
-                module = importlib.import_module(
-                    __name__.replace('computop', self.identifier.split('_')[0]).replace('.payment', '.paymentmethods')
-                )
-                for method in list(filter(lambda d: d['type'] == 'scheme', module.payment_methods)):
-                    if self.settings.get('_enabled', as_type=bool) and self.settings.get(
-                            'method_{}'.format(method['method']), as_type=bool):
-                        return True
-                return False
-            else:
-                return self.settings.get('_enabled', as_type=bool) and self.settings.get(
-                    'method_{}'.format(self.method),
-                    as_type=bool)
+        if self.type == 'meta':
+            module = importlib.import_module(
+                __name__.replace('computop', self.identifier.split('_')[0]).replace('.payment', '.paymentmethods')
+            )
+            for method in list(filter(lambda d: d['type'] == 'scheme', module.payment_methods)):
+                if self.settings.get('_enabled', as_type=bool) and self.settings.get(
+                        'method_{}'.format(method['method']), as_type=bool):
+                    return True
+            return False
+        else:
+            return self.settings.get('_enabled', as_type=bool) and self.settings.get(
+                'method_{}'.format(self.method),
+                as_type=bool)
 
     def _encrypt(self, plaintext):
         key = self.settings.get('blowfish_password').encode('UTF-8')
@@ -165,11 +164,13 @@ class ComputopMethod(BasePaymentProvider):
             'order': payment.order.code,
             'hash': hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
             'payment': payment.pk,
+            'payment_provider': ident,
         })
         notify_url = build_absolute_uri(self.event, 'plugins:pretix_{}:notify'.format(ident), kwargs={
             'order': payment.order.code,
             'hash': hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
             'payment': payment.pk,
+            'payment_provider': ident,
         })
         data = {
             'MerchantID': self.settings.get('merchant_id'),

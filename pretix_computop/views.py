@@ -61,7 +61,7 @@ class ComputopOrderView:
             self._set_status_code(response['Code'][0], response)
 
     def _parse_data(self, data):
-        payload = self.fm.decrypt(data)
+        payload = self.pprov.decrypt(data)
         return urllib.parse.parse_qs(payload)
 
     def _set_status_code(self, code, response):
