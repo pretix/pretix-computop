@@ -196,8 +196,8 @@ class ComputopMethod(BasePaymentProvider):
             'Len': encrypted_data[1],
             'Data': encrypted_data[0],
             'URLBack': return_url,  # wrong redirect when encrypted, check back later if fixed in computop
-            # todo 'Language':
-            # todo 'PayTypes:' / Add to settings for configuration or get from 1cs somehow?
+            'Language': payment.order.locale[:2],  # todo: Can this be moved to encrypted data?
+            'PayTypes': self.get_paytypes()  # todo: Can this be moved to encrypted data? # ToDo: The | should not be urlencoded
         }
         payment.info = json.dumps({
             'data': data,
@@ -218,3 +218,17 @@ class ComputopMethod(BasePaymentProvider):
             return True
         else:
             return False
+
+    def get_paytypes(self):
+        if self.type == 'meta':
+            paytypes = []
+            module = importlib.import_module(
+                __name__.replace('computop', self.identifier.split('_')[0]).replace('.payment', '.paymentmethods')
+            )
+            for method in list(filter(lambda d: d['type'] in ['meta', 'scheme'], module.payment_methods)):
+                if self.settings.get('_enabled', as_type=bool) and self.settings.get('method_{}'.format(method['method']), as_type=bool):
+                    paytypes.append(method['method'])
+
+            return "|".join(paytypes)
+        else:
+            return self.method
