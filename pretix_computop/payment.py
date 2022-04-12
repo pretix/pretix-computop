@@ -163,8 +163,7 @@ class ComputopMethod(BasePaymentProvider):
         data = {
             'MerchantID': self.settings.get('merchant_id'),
             'TransID': trans_id,
-            'OrderDesc': 'Test:0000',
-            # put in simulation mode by setting 'Test:0000' -> successful, 'Test:0305' -> failure
+            'OrderDesc': 'Order {}-{}'.format(self.event.slug.upper(), payment.full_id),
             'MsgVer': '2.0',
             'RefNr': ref_nr,
             'Amount': self._decimal_to_int(payment.amount),
