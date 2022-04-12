@@ -1,16 +1,16 @@
 import hashlib
-import json
 
 from cached_property import cached_property
 from django.contrib import messages
-from django.http import Http404, HttpResponse
-from django.shortcuts import redirect, render, get_object_or_404
+from django.http import Http404, HttpResponse, HttpResponseServerError
+from django.shortcuts import redirect, get_object_or_404
 from django.utils.decorators import method_decorator
-from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.translation import gettext_lazy as _
 
 from pretix.base.models import Order
+from pretix.base.payment import PaymentException
 from pretix.multidomain.urlreverse import eventreverse
 
 
@@ -54,19 +54,19 @@ class ComputopOrderView:
 @method_decorator(csrf_exempt, name='dispatch')
 class ReturnView(ComputopOrderView, View):
     template_name = 'pretix_computop/return.html'
+    viewsource = 'return_view'
 
     def post(self, request, *args, **kwargs):
         if request.POST['Data']:
-            response = self.parse_data(request.POST.get('Data'))
-            if self.check_hash(response):
-                self.payment.info = json.dumps(response)
-                self.payment.save(update_fields=['info'])
-
-                if response['Code'][0] == '00000000':
-                    self.payment.confirm()
-                else:
-                    messages.error(request, _('Your payment failed. Please try again.'))
-                    self.payment.fail(info=response)
+            response = self.pprov.parse_data(request.POST.get('Data'))
+            if self.pprov.check_hash(response):
+                try:
+                    self.pprov.process_result(self.payment, response, self.viewsource)
+                except PaymentException as e:
+                    messages.error(self.request, str(e))
+            else:
+                messages.error(self.request, _('Sorry, we could not verify the authenticity of your request. Please '
+                                               'contact the event organizer to get your payment verified manually.'))
         return self._redirect_to_order()
 
     def get(self, request, *args, **kwargs):
@@ -76,16 +76,14 @@ class ReturnView(ComputopOrderView, View):
 @method_decorator(csrf_exempt, name='dispatch')
 class NotifyView(ComputopOrderView, View):
     template_name = 'pretix_computop/return.html'
+    viewsource = 'notify_view'
 
     def post(self, request, *args, **kwargs):
         if request.POST['Data']:
-            response = self.parse_data(request.POST.get('Data'))
-            if self.check_hash(response):
-                self.payment.info = json.dumps(response)
-                self.payment.save(update_fields=['info'])
-
-                if response['Code'][0] == '00000000':
-                    self.payment.confirm()
-                else:
-                    self.payment.fail(info=response)
+            response = self.pprov.parse_data(request.POST.get('Data'))
+            if self.pprov.check_hash(response):
+                try:
+                    self.pprov.process_result(self.payment, response, self.viewsource)
+                except PaymentException as e:
+                    return HttpResponseServerError()
         return HttpResponse('[accepted]', status=200)

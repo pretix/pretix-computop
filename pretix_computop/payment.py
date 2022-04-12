@@ -1,11 +1,10 @@
 import hashlib
 import importlib
-import json
 import urllib
 from base64 import b16encode, b16decode
 from collections import OrderedDict
 from decimal import Decimal
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qsl
 
 import requests
 from Crypto.Hash import SHA256, HMAC
@@ -14,6 +13,7 @@ from django import forms
 from django.conf import settings
 from django.http import HttpRequest
 from django.template.loader import get_template
+from django.utils.timezone import now
 
 from django.utils.translation import gettext_lazy as _
 
@@ -22,7 +22,7 @@ from Crypto.Cipher import Blowfish
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
 from pretix.base.models import Event, OrderPayment, Order, OrderRefund
-from pretix.base.payment import BasePaymentProvider
+from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
 from pretix.multidomain.urlreverse import build_absolute_uri
 
@@ -123,7 +123,7 @@ class ComputopMethod(BasePaymentProvider):
         secret = self.settings.get('hmac_password').encode('UTF-8')
         h = HMAC.new(secret, digestmod=SHA256)
         h.update(plain)
-        return h.hexdigest()
+        return h.hexdigest().upper()
 
     def _amount_to_decimal(self, cents):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
@@ -191,11 +191,7 @@ class ComputopMethod(BasePaymentProvider):
             'Language': payment.order.locale[:2],
             #'PayTypes': self.get_paytypes()  # todo: Can this be moved to encrypted data? # ToDo: The | should not be urlencoded # todo: breaks, need to wait for mail reply to fix
         }
-        payment.info = json.dumps({
-            'data': data,
-            'encrypted_data': encrypted_data,
-            'payload': payload,
-        })
+        payment.info_data = data
         payment.save(update_fields=['info'])
         return self.apiurl + '?' + urlencode(payload)
 
@@ -215,15 +211,16 @@ class ComputopMethod(BasePaymentProvider):
             'Amount': self._decimal_to_int(refund.amount),
             'Currency': self.event.currency,
             'MAC': self._calculate_hmac(
+                payment_id=refund.payment.info_data['PayID'],
                 transaction_id=refund.full_id,
                 amount_or_status=str(self._decimal_to_int(refund.amount)),
                 currency_or_code=self.event.currency),
-            'PayID': refund.payment.info_data['PayID'][0],
+            'PayID': refund.payment.info_data['PayID'],
             'TransID': refund.full_id,
             'RefNr': refund.full_id,
             'OrderDesc': 'Order {}-{}'.format(self.event.slug.upper(), refund.full_id),
         }
-        print(data)
+
         encrypted_data = self._encrypt(urlencode(data))
         payload = {
             'MerchantID': self.settings.get('merchant_id'),
@@ -238,22 +235,15 @@ class ComputopMethod(BasePaymentProvider):
 
         parsed = urllib.parse.parse_qs(req.text)
         processed = self.parse_data(parsed['Data'][0])
-        refund.info = json.dumps(processed)
-        refund.save(update_fields=['info'])
-
-        if refund.info_data['Status'][0] == 'FAILED':
-            refund.state = OrderRefund.REFUND_STATE_FAILED
-            refund.save(update_fields=['state'])
-        elif refund.info_data['Status'][0] == 'AUTHORIZED':
-            refund.done()
+        self.process_result(refund, processed)
 
     def check_hash(self, payload_parsed):
-        mid = payload_parsed['mid'][0]
-        mac = str(payload_parsed['MAC'][0]).lower().rstrip()
-        trans_id = payload_parsed['TransID'][0]
-        pay_id = payload_parsed['PayID'][0]
-        status = payload_parsed['Status'][0]
-        code = payload_parsed['Code'][0]
+        mid = payload_parsed['mid']
+        mac = str(payload_parsed['MAC']).rstrip()
+        trans_id = payload_parsed['TransID']
+        pay_id = payload_parsed['PayID']
+        status = payload_parsed['Status']
+        code = payload_parsed['Code']
         if mid == self.settings.get('merchant_id') and mac == self._calculate_hmac(pay_id, trans_id, status, code):
             return True
         else:
@@ -275,4 +265,62 @@ class ComputopMethod(BasePaymentProvider):
 
     def parse_data(self, data):
         payload = self.decrypt(str(data))
-        return urllib.parse.parse_qs(payload)
+        return dict(parse_qsl(payload))
+
+    def process_result(self, payment_or_refund, data, datasource=None):
+        if datasource:
+            payment_or_refund.order.log_action('pretix_computop.event', data={
+                'source': datasource,
+                'data': data
+            })
+
+        if isinstance(payment_or_refund, OrderPayment):
+            payment = payment_or_refund
+
+            # OK
+            if data['Code'][:1] == '0':
+                if payment.state not in (OrderPayment.PAYMENT_STATE_CONFIRMED, OrderPayment.PAYMENT_STATE_REFUNDED):
+                    payment.info_data = data
+                    payment.save(update_fields=['info'])
+                    payment.confirm()
+            # Error || Fatal Error
+            elif data['Code'][:1] in ['2', '4']:
+                if payment.state not in (OrderPayment.PAYMENT_STATE_CONFIRMED, OrderPayment.PAYMENT_STATE_REFUNDED):
+                    payment.fail(info=data)
+            # Continue / Transient || EMV 3DS Info
+            elif data['Code'][:1] in ['6', '7']:
+                if payment.state == OrderPayment.PAYMENT_STATE_CREATED:
+                    payment.state = OrderPayment.PAYMENT_STATE_PENDING
+                    payment.info_data = data
+                    payment.save(update_fields=['state', 'info'])
+            else:
+                payment.fail(info=data)
+
+        elif isinstance(payment_or_refund, OrderRefund) and payment_or_refund.state in (
+                OrderRefund.REFUND_STATE_CREATED, OrderRefund.REFUND_STATE_TRANSIT
+        ):
+            refund = payment_or_refund
+
+            # OK
+            if data['Code'][:1] == '0':
+                refund.info_data = data
+                refund.save(update_fields=['info'])
+                refund.done()
+            # Error || Fatal Error
+            elif data['Code'][:1] in ['2', '4']:
+                refund.state = OrderRefund.REFUND_STATE_FAILED
+                refund.execution_date = now()
+                refund.info_data = data
+                refund.save(update_fields=['state', 'execution_date', 'info'])
+            # Continue / Transient || EMV 3DS Info
+            elif data['Code'][:1] in ['6', '7']:
+                refund.state = OrderRefund.REFUND_STATE_TRANSIT
+                refund.info_data = data
+                refund.save(update_fields=['state', 'info'])
+            else:
+                refund.state = OrderRefund.REFUND_STATE_FAILED
+                refund.execution_date = now()
+                refund.info_data = data
+                refund.save(update_fields=['state', 'execution_date', 'info'])
+        else:
+            raise PaymentException(_('We had trouble processing your transaction.'))
