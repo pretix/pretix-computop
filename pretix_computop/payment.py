@@ -83,7 +83,7 @@ class ComputopMethod(BasePaymentProvider):
             module = importlib.import_module(
                 __name__.replace('computop', self.identifier.split('_')[0]).replace('.payment', '.paymentmethods')
             )
-            for method in list(filter(lambda d: d['type'] == 'scheme', module.payment_methods)):
+            for method in list(filter(lambda d: d['type'] in ['meta', 'scheme'], module.payment_methods)):
                 if self.settings.get('_enabled', as_type=bool) and self.settings.get(
                         'method_{}'.format(method['method']), as_type=bool):
                     return True
