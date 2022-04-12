@@ -14,8 +14,6 @@ from django.views.decorators.csrf import csrf_exempt
 from pretix.base.models import Order
 from pretix.multidomain.urlreverse import eventreverse
 
-from .payment import ComputopMethod
-
 
 class ComputopOrderView:
     def dispatch(self, request, *args, **kwargs):
@@ -54,11 +52,17 @@ class ComputopOrderView:
         return self.payment.payment_provider
 
     def _handle_data(self, data):
-        response = self._parse_data(data)
-        if self.pprov.check_hash(response):
-            self.payment.info = json.dumps({'request': self.payment.info, 'response': response})
-            self.payment.save(update_fields=['info'])  # todo: fix (payment not the correct object?)
-            self._set_status_code(response['Code'][0], response)
+        try:
+            response = self._parse_data(data)
+        except TypeError as err:
+            self.payment.fail({'decryption_error': err, 'request': self.payment.info})
+        except ValueError as err:
+            self.payment.fail({'decryption_error': err, 'request': self.payment.info})
+        else:
+            if self.pprov.check_hash(response):
+                self.payment.info = json.dumps({'request': self.payment.info, 'response': response})
+                self.payment.save(update_fields=['info'])
+                self._set_status_code(response['Code'][0], response)
 
     def _parse_data(self, data):
         payload = self.pprov.decrypt(data)
@@ -92,5 +96,4 @@ class NotifyView(ReturnView, ComputopOrderView, View):
         if request.POST['Data']:
             data = str(request.POST.get('Data'))
             self._handle_data(data)
-        print('notify', request.POST)
         return HttpResponse('[accepted]', status=200)

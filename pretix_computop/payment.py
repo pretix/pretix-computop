@@ -107,9 +107,10 @@ class ComputopMethod(BasePaymentProvider):
         bs = Blowfish.block_size
         ciphertext_bytes = b16decode(ciphertext)
         decrypted_text = cipher.decrypt(ciphertext_bytes)
-        # todo: handle errors (try catch?)
-        # todo: unpadded_text = Padding.unpad(decrypted_text, bs)  # maybe not necessary or even unhelpful
-        unpadded_text = decrypted_text
+        try:
+            unpadded_text = Padding.unpad(decrypted_text, bs)
+        except ValueError:
+            unpadded_text = decrypted_text.rstrip()  # sometimes bs and padding are wrong, we strip ending spaces then
         return unpadded_text.decode('UTF-8')
 
     def _calculate_mac(self, payment_id='', transaction_id='', payment_amount='', currency=''):
@@ -197,7 +198,7 @@ class ComputopMethod(BasePaymentProvider):
             'Data': encrypted_data[0],
             'URLBack': return_url,  # wrong redirect when encrypted, check back later if fixed in computop
             'Language': payment.order.locale[:2],  # todo: Can this be moved to encrypted data?
-            'PayTypes': self.get_paytypes()  # todo: Can this be moved to encrypted data? # ToDo: The | should not be urlencoded
+            #'PayTypes': self.get_paytypes()  # todo: Can this be moved to encrypted data? # ToDo: The | should not be urlencoded # todo: breaks, need to wait for mail reply to fix
         }
         payment.info = json.dumps({
             'data': data,
