@@ -113,21 +113,10 @@ class ComputopMethod(BasePaymentProvider):
             unpadded_text = decrypted_text.rstrip()  # sometimes bs and padding are wrong, we strip ending spaces then
         return unpadded_text.decode('UTF-8')
 
-    def _calculate_mac(self, payment_id='', transaction_id='', payment_amount='', currency=''):
-        pay_id = str(payment_id)
-        trans_id = str(transaction_id)
+    def _calculate_hmac(self, payment_id='', transaction_id='', amount_or_status='', currency_or_code=''):
         merchant_id = self.settings.get('merchant_id')
-        amount = str(payment_amount)
-        plain = (pay_id + '*' + trans_id + '*' + merchant_id + '*' + amount + '*' + currency).encode('UTF-8')
-        secret = self.settings.get('hmac_password').encode('UTF-8')
-        h = HMAC.new(secret, digestmod=SHA256)
-        h.update(plain)
-        return h.hexdigest()
-
-    # todo: find out if/how mac functions (above and below) can be combined as they nearly do the same
-    def _calculate_hmac(self, payment_id='', transaction_id='', status='', code=''):
-        merchant_id = self.settings.get('merchant_id')
-        cat = (str(payment_id) + '*' + str(transaction_id) + '*' + merchant_id + '*' + str(status) + '*' + str(code))
+        cat = (str(payment_id) + '*' + str(transaction_id) + '*' + merchant_id + '*' + str(amount_or_status) + '*'
+               + str(currency_or_code))
         plain = cat.encode('UTF-8')
         secret = self.settings.get('hmac_password').encode('UTF-8')
         h = HMAC.new(secret, digestmod=SHA256)
@@ -185,10 +174,10 @@ class ComputopMethod(BasePaymentProvider):
             'URLSuccess': return_url,
             'URLFailure': return_url,
             'URLNotify': notify_url,
-            'MAC': self._calculate_mac(
+            'MAC': self._calculate_hmac(
                 transaction_id=trans_id,
-                payment_amount=str(self._decimal_to_int(payment.amount)),
-                currency=self.event.currency),
+                amount_or_status=str(self._decimal_to_int(payment.amount)),
+                currency_or_code=self.event.currency),
             'Response': 'encrypt',
         }
         encrypted_data = self._encrypt(urlencode(data))
