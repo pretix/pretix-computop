@@ -1,14 +1,12 @@
 import hashlib
-
 from cached_property import cached_property
 from django.contrib import messages
 from django.http import Http404, HttpResponse, HttpResponseServerError
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.utils.decorators import method_decorator
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.translation import gettext_lazy as _
-
 from pretix.base.models import Order
 from pretix.base.payment import PaymentException
 from pretix.multidomain.urlreverse import eventreverse
@@ -46,10 +44,6 @@ class ComputopOrderView:
             'secret': self.order.secret
         }) + ('?paid=yes' if self.order.status == Order.STATUS_PAID else ''))
 
-    @cached_property
-    def pprov(self):
-        return self.payment.payment_provider
-
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ReturnView(ComputopOrderView, View):
@@ -84,6 +78,6 @@ class NotifyView(ComputopOrderView, View):
             if self.pprov.check_hash(response):
                 try:
                     self.pprov.process_result(self.payment, response, self.viewsource)
-                except PaymentException as e:
+                except PaymentException:
                     return HttpResponseServerError()
         return HttpResponse('[accepted]', status=200)

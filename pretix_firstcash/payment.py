@@ -2,7 +2,8 @@ import logging
 from django.utils.translation import gettext_lazy as _
 
 from pretix_computop.payment import (
-    ComputopMethod as SuperComputopMethod, ComputopSettingsHolder,
+    ComputopMethod as SuperComputopMethod,
+    ComputopSettingsHolder,
 )
 
 logger = logging.getLogger('pretix_firstcash')

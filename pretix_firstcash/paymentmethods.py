@@ -1,5 +1,6 @@
 from pretix_computop.paymentmethods import (
-    get_payment_method_classes, payment_methods as payment_methods_repo,
+    get_payment_method_classes,
+    payment_methods as payment_methods_repo,
 )
 
 from .payment import ComputopMethod, FirstcashSettingsHolder

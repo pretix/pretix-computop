@@ -1,30 +1,26 @@
 import hashlib
 import importlib
-import urllib
-from base64 import b16encode, b16decode
-from collections import OrderedDict
-from decimal import Decimal
-from urllib.parse import urlencode, parse_qsl
-
 import requests
-from Crypto.Hash import SHA256, HMAC
+import urllib
+from base64 import b16decode, b16encode
+from collections import OrderedDict
+from Crypto.Cipher import Blowfish
+from Crypto.Hash import HMAC, SHA256
 from Crypto.Util import Padding
+from decimal import Decimal
 from django import forms
 from django.conf import settings
 from django.http import HttpRequest
 from django.template.loader import get_template
 from django.utils.timezone import now
-
 from django.utils.translation import gettext_lazy as _
-
-from Crypto.Cipher import Blowfish
-
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
-from pretix.base.models import Event, OrderPayment, Order, OrderRefund
+from pretix.base.models import Event, Order, OrderPayment, OrderRefund
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
 from pretix.multidomain.urlreverse import build_absolute_uri
+from urllib.parse import parse_qsl, urlencode
 
 
 class ComputopSettingsHolder(BasePaymentProvider):
@@ -187,9 +183,13 @@ class ComputopMethod(BasePaymentProvider):
             'MerchantID': self.settings.get('merchant_id'),
             'Len': encrypted_data[1],
             'Data': encrypted_data[0],
-            'URLBack': return_url,  # wrong redirect when encrypted, check back later if fixed in computop
+            # Could be placed in the encrypted data section; however this breaks the 1CS payment form.
+            # Unknown if this also affects CT.
+            'URLBack': return_url,
             'Language': payment.order.locale[:2],
-            #'PayTypes': self.get_paytypes()  # todo: Can this be moved to encrypted data? # ToDo: The | should not be urlencoded # todo: breaks, need to wait for mail reply to fix
+            # This breaks the 1CS payment form; needs fixing first on 1CS side. Unknown if it also affects CT
+            # ToDo: The | should not be urlencoded
+            # 'PayTypes': self.get_paytypes()
         }
         payment.info_data = data
         payment.save(update_fields=['info'])

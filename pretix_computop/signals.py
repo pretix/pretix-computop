@@ -1,6 +1,6 @@
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _  # NoQA
-from pretix.base.signals import register_payment_providers, logentry_display
+from pretix.base.signals import logentry_display, register_payment_providers
 
 
 @receiver(register_payment_providers, dispatch_uid="payment_computop")
