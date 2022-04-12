@@ -1,11 +1,13 @@
 import hashlib
 import importlib
 import json
+import urllib
 from base64 import b16encode, b16decode
 from collections import OrderedDict
 from decimal import Decimal
 from urllib.parse import urlencode
 
+import requests
 from Crypto.Hash import SHA256, HMAC
 from Crypto.Util import Padding
 from django import forms
@@ -19,7 +21,7 @@ from Crypto.Cipher import Blowfish
 
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
-from pretix.base.models import Event, OrderPayment, Order
+from pretix.base.models import Event, OrderPayment, Order, OrderRefund
 from pretix.base.payment import BasePaymentProvider
 from pretix.base.settings import SettingsSandbox
 from pretix.multidomain.urlreverse import build_absolute_uri
@@ -197,6 +199,54 @@ class ComputopMethod(BasePaymentProvider):
         payment.save(update_fields=['info'])
         return self.apiurl + '?' + urlencode(payload)
 
+    def payment_refund_supported(self, payment: OrderPayment) -> bool:
+        if 'PayID' in payment.info:
+            return True
+        return False
+
+    def payment_partial_refund_supported(self, payment: OrderPayment) -> bool:
+        if 'PayID' in payment.info:
+            return True
+        return False
+
+    def execute_refund(self, refund: OrderRefund):
+        data = {
+            'MerchantID': self.settings.get('merchant_id'),
+            'Amount': self._decimal_to_int(refund.amount),
+            'Currency': self.event.currency,
+            'MAC': self._calculate_hmac(
+                transaction_id=refund.full_id,
+                amount_or_status=str(self._decimal_to_int(refund.amount)),
+                currency_or_code=self.event.currency),
+            'PayID': refund.payment.info_data['PayID'][0],
+            'TransID': refund.full_id,
+            'RefNr': refund.full_id,
+            'OrderDesc': 'Order {}-{}'.format(self.event.slug.upper(), refund.full_id),
+        }
+        print(data)
+        encrypted_data = self._encrypt(urlencode(data))
+        payload = {
+            'MerchantID': self.settings.get('merchant_id'),
+            'Len': encrypted_data[1],
+            'Data': encrypted_data[0],
+        }
+
+        req = requests.post(
+            "https://www.computop-paygate.com/credit.aspx",
+            data=payload,
+        )
+
+        parsed = urllib.parse.parse_qs(req.text)
+        processed = self.parse_data(parsed['Data'][0])
+        refund.info = json.dumps(processed)
+        refund.save(update_fields=['info'])
+
+        if refund.info_data['Status'][0] == 'FAILED':
+            refund.state = OrderRefund.REFUND_STATE_FAILED
+            refund.save(update_fields=['state'])
+        elif refund.info_data['Status'][0] == 'AUTHORIZED':
+            refund.done()
+
     def check_hash(self, payload_parsed):
         mid = payload_parsed['mid'][0]
         mac = str(payload_parsed['MAC'][0]).lower().rstrip()
@@ -222,3 +272,7 @@ class ComputopMethod(BasePaymentProvider):
             return "|".join(paytypes)
         else:
             return self.method
+
+    def parse_data(self, data):
+        payload = self.decrypt(str(data))
+        return urllib.parse.parse_qs(payload)

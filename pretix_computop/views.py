@@ -1,6 +1,5 @@
 import hashlib
 import json
-import urllib.parse
 
 from cached_property import cached_property
 from django.contrib import messages
@@ -51,30 +50,6 @@ class ComputopOrderView:
     def pprov(self):
         return self.payment.payment_provider
 
-    def _handle_data(self, data):
-        try:
-            response = self._parse_data(data)
-        except TypeError as err:
-            self.payment.fail({'decryption_error': err, 'request': self.payment.info})
-        except ValueError as err:
-            self.payment.fail({'decryption_error': err, 'request': self.payment.info})
-        else:
-            if self.pprov.check_hash(response):
-                self.payment.info = json.dumps({'request': self.payment.info, 'response': response})
-                self.payment.save(update_fields=['info'])
-                self._set_status_code(response['Code'][0], response)
-
-    def _parse_data(self, data):
-        payload = self.pprov.decrypt(data)
-        return urllib.parse.parse_qs(payload)
-
-    def _set_status_code(self, code, response):
-        if code == '00000000':
-            self.payment.confirm()
-        else:
-            messages.error(self.request, _('Your payment failed. Please try again.'))
-            self.payment.fail(info={'request': self.payment.info, 'response': response})
-
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ReturnView(ComputopOrderView, View):
@@ -82,8 +57,16 @@ class ReturnView(ComputopOrderView, View):
 
     def post(self, request, *args, **kwargs):
         if request.POST['Data']:
-            data = str(request.POST.get('Data'))
-            self._handle_data(data)
+            response = self.parse_data(request.POST.get('Data'))
+            if self.check_hash(response):
+                self.payment.info = json.dumps(response)
+                self.payment.save(update_fields=['info'])
+
+                if response['Code'][0] == '00000000':
+                    self.payment.confirm()
+                else:
+                    messages.error(request, _('Your payment failed. Please try again.'))
+                    self.payment.fail(info=response)
         return self._redirect_to_order()
 
     def get(self, request, *args, **kwargs):
@@ -91,9 +74,18 @@ class ReturnView(ComputopOrderView, View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class NotifyView(ReturnView, ComputopOrderView, View):
+class NotifyView(ComputopOrderView, View):
+    template_name = 'pretix_computop/return.html'
+
     def post(self, request, *args, **kwargs):
         if request.POST['Data']:
-            data = str(request.POST.get('Data'))
-            self._handle_data(data)
+            response = self.parse_data(request.POST.get('Data'))
+            if self.check_hash(response):
+                self.payment.info = json.dumps(response)
+                self.payment.save(update_fields=['info'])
+
+                if response['Code'][0] == '00000000':
+                    self.payment.confirm()
+                else:
+                    self.payment.fail(info=response)
         return HttpResponse('[accepted]', status=200)
