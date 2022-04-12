@@ -186,7 +186,7 @@ class ComputopMethod(BasePaymentProvider):
             'Len': encrypted_data[1],
             'Data': encrypted_data[0],
             'URLBack': return_url,  # wrong redirect when encrypted, check back later if fixed in computop
-            'Language': payment.order.locale[:2],  # todo: Can this be moved to encrypted data?
+            'Language': payment.order.locale[:2],
             #'PayTypes': self.get_paytypes()  # todo: Can this be moved to encrypted data? # ToDo: The | should not be urlencoded # todo: breaks, need to wait for mail reply to fix
         }
         payment.info = json.dumps({
