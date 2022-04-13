@@ -98,49 +98,6 @@ class ComputopMethod(BasePaymentProvider):
     def is_allowed(self, request: HttpRequest, total: Decimal) -> bool:
         return super().is_allowed(request, total) and self._decimal_to_int(total) >= 100
 
-    def _encrypt(self, plaintext):
-        key = self.settings.get('blowfish_password').encode('UTF-8')
-        cipher = Blowfish.new(key, Blowfish.MODE_ECB)
-        bs = Blowfish.block_size
-        padded_text = Padding.pad(plaintext.encode('UTF-8'), bs)
-        encrypted_text = cipher.encrypt(padded_text)
-        return b16encode(encrypted_text).decode(), len(plaintext)
-
-    def _decrypt(self, ciphertext):
-        key = self.settings.get('blowfish_password').encode('UTF-8')
-        cipher = Blowfish.new(key, Blowfish.MODE_ECB)
-        bs = Blowfish.block_size
-        ciphertext_bytes = b16decode(ciphertext)
-        try:
-            decrypted_text = cipher.decrypt(ciphertext_bytes)
-        except (TypeError, ValueError) as e:
-            logger.exception(e)
-            raise PaymentException(
-                _('We had trouble communicating with the payment service. Please try again and get '
-                  'in touch with us if this problem persists.'))
-        try:
-            unpadded_text = Padding.unpad(decrypted_text, bs)
-        except ValueError:
-            unpadded_text = decrypted_text.rstrip()  # sometimes bs and padding are wrong, we strip ending spaces then
-        return unpadded_text.decode('UTF-8')
-
-    def _calculate_hmac(self, payment_id='', transaction_id='', amount_or_status='', currency_or_code=''):
-        merchant_id = self.settings.get('merchant_id')
-        cat = '*'.join([payment_id, transaction_id, merchant_id, amount_or_status, currency_or_code])
-        plain = cat.encode('UTF-8')
-        secret = self.settings.get('hmac_password').encode('UTF-8')
-        h = HMAC.new(secret, digestmod=SHA256)
-        h.update(plain)
-        return h.hexdigest().upper()
-
-    def _amount_to_decimal(self, cents):
-        places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
-        return round_decimal(float(cents) / (10 ** places), self.event.currency)
-
-    def _decimal_to_int(self, amount):
-        places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
-        return int(amount * 10 ** places)
-
     def payment_form_render(self, request: HttpRequest, total: Decimal, order: Order = None) -> str:
         template = get_template('pretix_computop/checkout_payment_form.html')
         return template.render()
@@ -215,7 +172,7 @@ class ComputopMethod(BasePaymentProvider):
             'URLBack': return_url,
             'Language': payment.order.locale[:2],
             # This breaks the 1CS payment form; needs fixing first on 1CS side. Unknown if it also affects CT
-            # 'PayTypes': self.get_paytypes()
+            # 'PayTypes': self._get_paytypes()
         }
         data['Description'] = 'Payment process initiated but not completed'
         payment.info_data = data
@@ -314,20 +271,6 @@ class ComputopMethod(BasePaymentProvider):
         else:
             return False
 
-    def get_paytypes(self):
-        if self.type == 'meta':
-            paytypes = []
-            module = importlib.import_module(
-                __name__.replace('computop', self.identifier.split('_')[0]).replace('.payment', '.paymentmethods')
-            )
-            for method in list(filter(lambda d: d['type'] in ['meta', 'scheme'], module.payment_methods)):
-                if self.settings.get('_enabled', as_type=bool) and self.settings.get('method_{}'.format(method['method']), as_type=bool):
-                    paytypes.append(method['method'])
-
-            return "|".join(paytypes)
-        else:
-            return self.method
-
     def parse_data(self, data):
         payload = self._decrypt(str(data))
         return dict(parse_qsl(payload))
@@ -389,3 +332,60 @@ class ComputopMethod(BasePaymentProvider):
                 refund.save(update_fields=['state', 'execution_date', 'info'])
         else:
             raise PaymentException(_('We had trouble processing your transaction.'))
+
+    def _get_paytypes(self):
+        if self.type == 'meta':
+            paytypes = []
+            module = importlib.import_module(
+                __name__.replace('computop', self.identifier.split('_')[0]).replace('.payment', '.paymentmethods')
+            )
+            for method in list(filter(lambda d: d['type'] in ['meta', 'scheme'], module.payment_methods)):
+                if self.settings.get('_enabled', as_type=bool) and self.settings.get('method_{}'.format(method['method']), as_type=bool):
+                    paytypes.append(method['method'])
+
+            return "|".join(paytypes)
+        else:
+            return self.method
+
+    def _encrypt(self, plaintext):
+        key = self.settings.get('blowfish_password').encode('UTF-8')
+        cipher = Blowfish.new(key, Blowfish.MODE_ECB)
+        bs = Blowfish.block_size
+        padded_text = Padding.pad(plaintext.encode('UTF-8'), bs)
+        encrypted_text = cipher.encrypt(padded_text)
+        return b16encode(encrypted_text).decode(), len(plaintext)
+
+    def _decrypt(self, ciphertext):
+        key = self.settings.get('blowfish_password').encode('UTF-8')
+        cipher = Blowfish.new(key, Blowfish.MODE_ECB)
+        bs = Blowfish.block_size
+        ciphertext_bytes = b16decode(ciphertext)
+        try:
+            decrypted_text = cipher.decrypt(ciphertext_bytes)
+        except (TypeError, ValueError) as e:
+            logger.exception(e)
+            raise PaymentException(
+                _('We had trouble communicating with the payment service. Please try again and get '
+                  'in touch with us if this problem persists.'))
+        try:
+            unpadded_text = Padding.unpad(decrypted_text, bs)
+        except ValueError:
+            unpadded_text = decrypted_text.rstrip()  # sometimes bs and padding are wrong, we strip ending spaces then
+        return unpadded_text.decode('UTF-8')
+
+    def _calculate_hmac(self, payment_id='', transaction_id='', amount_or_status='', currency_or_code=''):
+        merchant_id = self.settings.get('merchant_id')
+        cat = '*'.join([payment_id, transaction_id, merchant_id, amount_or_status, currency_or_code])
+        plain = cat.encode('UTF-8')
+        secret = self.settings.get('hmac_password').encode('UTF-8')
+        h = HMAC.new(secret, digestmod=SHA256)
+        h.update(plain)
+        return h.hexdigest().upper()
+
+    def _amount_to_decimal(self, cents):
+        places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
+        return round_decimal(float(cents) / (10 ** places), self.event.currency)
+
+    def _decimal_to_int(self, amount):
+        places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
+        return int(amount * 10 ** places)
