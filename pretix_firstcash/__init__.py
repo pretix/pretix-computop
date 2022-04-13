@@ -15,7 +15,10 @@ class PluginApp(PluginConfig):
     class PretixPluginMeta:
         name = gettext_lazy("First Cash Solution")
         author = "Phin Wolkwitz"
-        description = gettext_lazy("This plugin allows you to use First Cash Solution as a payment provider")
+        description = gettext_lazy(
+            "Use First Cash Solution as a payment provider, where you can activate various payment methods "
+            "for your customers, such as payment via credit card, giropay, and many more."
+        )
         visible = True
         version = __version__
         category = "PAYMENT"

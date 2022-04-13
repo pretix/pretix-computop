@@ -15,7 +15,9 @@ class PluginApp(PluginConfig):
     class PretixPluginMeta:
         name = gettext_lazy("Computop")
         author = "Phin Wolkwitz"
-        description = gettext_lazy("This plugin allows you to use Computop-based payment providers")
+        description = gettext_lazy(
+            "Use Computop-based payment providers"
+        )
         visible = True
         version = __version__
         category = "PAYMENT"

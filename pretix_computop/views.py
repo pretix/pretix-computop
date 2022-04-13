@@ -15,15 +15,21 @@ from pretix.multidomain.urlreverse import eventreverse
 class ComputopOrderView:
     def dispatch(self, request, *args, **kwargs):
         try:
-            self.order = request.event.orders.get(code=kwargs['order'])
-            if hashlib.sha1(self.order.secret.lower().encode()).hexdigest() != kwargs['hash'].lower():
-                raise Http404('Unknown order')
+            self.order = request.event.orders.get(code=kwargs["order"])
+            if (
+                hashlib.sha1(self.order.secret.lower().encode()).hexdigest()
+                != kwargs["hash"].lower()
+            ):
+                raise Http404("Unknown order")
         except Order.DoesNotExist:
             # Do a hash comparison as well to harden timing attacks
-            if 'abcdefghijklmnopq'.lower() == hashlib.sha1('abcdefghijklmnopq'.encode()).hexdigest():
-                raise Http404('Unknown order')
+            if (
+                "abcdefghijklmnopq".lower()
+                == hashlib.sha1("abcdefghijklmnopq".encode()).hexdigest()
+            ):
+                raise Http404("Unknown order")
             else:
-                raise Http404('Unknown order')
+                raise Http404("Unknown order")
         return super().dispatch(request, *args, **kwargs)
 
     @cached_property
@@ -34,32 +40,40 @@ class ComputopOrderView:
     def payment(self):
         return get_object_or_404(
             self.order.payments,
-            pk=self.kwargs['payment'],
-            provider__istartswith=self.kwargs['payment_provider'],
+            pk=self.kwargs["payment"],
+            provider__istartswith=self.kwargs["payment_provider"],
         )
 
     def _redirect_to_order(self):
-        return redirect(eventreverse(self.request.event, 'presale:event.order', kwargs={
-            'order': self.order.code,
-            'secret': self.order.secret
-        }) + ('?paid=yes' if self.order.status == Order.STATUS_PAID else ''))
+        return redirect(
+            eventreverse(
+                self.request.event,
+                "presale:event.order",
+                kwargs={"order": self.order.code, "secret": self.order.secret},
+            )
+            + ("?paid=yes" if self.order.status == Order.STATUS_PAID else "")
+        )
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class ReturnView(ComputopOrderView, View):
-    template_name = 'pretix_computop/return.html'
-    viewsource = 'return_view'
+    template_name = "pretix_computop/return.html"
+    viewsource = "return_view"
 
     def post(self, request, *args, **kwargs):
-        if request.POST['Data']:
+        if request.POST["Data"]:
             try:
-                response = self.pprov.parse_data(request.POST.get('Data'))
+                response = self.pprov.parse_data(request.POST.get("Data"))
                 if self.pprov.check_hash(response):
                     self.pprov.process_result(self.payment, response, self.viewsource)
                 else:
-                    messages.error(self.request, _('Sorry, we could not verify the authenticity of your request.'
-                                                   'Please contact the event organizer to get your payment verified '
-                                                   'manually.'))
+                    messages.error(
+                        self.request,
+                        _(
+                            "Sorry, we could not verify the authenticity of your request."
+                            "Please contact the event organizer to get your payment verified manually."
+                        ),
+                    )
             except PaymentException as e:
                 messages.error(self.request, str(e))
                 return self._redirect_to_order()
@@ -69,15 +83,15 @@ class ReturnView(ComputopOrderView, View):
         return self._redirect_to_order()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class NotifyView(ComputopOrderView, View):
-    template_name = 'pretix_computop/return.html'
-    viewsource = 'notify_view'
+    template_name = "pretix_computop/return.html"
+    viewsource = "notify_view"
 
     def post(self, request, *args, **kwargs):
-        if request.POST['Data']:
+        if request.POST["Data"]:
             try:
-                response = self.pprov.parse_data(request.POST.get('Data'))
+                response = self.pprov.parse_data(request.POST.get("Data"))
             except PaymentException:
                 HttpResponseServerError()
             if self.pprov.check_hash(response):
@@ -85,4 +99,4 @@ class NotifyView(ComputopOrderView, View):
                     self.pprov.process_result(self.payment, response, self.viewsource)
                 except PaymentException:
                     return HttpResponseServerError()
-        return HttpResponse('[accepted]', status=200)
+        return HttpResponse("[accepted]", status=200)

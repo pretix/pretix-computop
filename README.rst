@@ -1,9 +1,10 @@
-Firstcash payments for pretix
-============================
+Computop – First Cash Solution
+==============================
 
 This is a plugin for `pretix`_. 
 
-This plugin allows you to use Computop based payment providers like 1cs.
+Allows to process payments through the payment providers Computop or First Cash Solution. The payment providers
+accept various payment methods for your customers, such as payment via credit card, giropay, and many more.
 
 Development setup
 -----------------

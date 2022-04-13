@@ -12,7 +12,7 @@ def register_payment_provider(sender, **kwargs):
 
 @receiver(signal=logentry_display, dispatch_uid="payment_computop_logentry_display")
 def logentry_display(sender, logentry, **kwargs):
-    if logentry.action_type != 'pretix_computop.event':
+    if logentry.action_type != "pretix_computop.event":
         return
 
-    return _('Computop reported an event')
+    return _("Computop reported an event")

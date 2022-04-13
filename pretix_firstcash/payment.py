@@ -6,15 +6,15 @@ from pretix_computop.payment import (
     ComputopSettingsHolder,
 )
 
-logger = logging.getLogger('pretix_firstcash')
+logger = logging.getLogger("pretix_firstcash")
 
 
 class FirstcashSettingsHolder(ComputopSettingsHolder):
-    identifier = 'firstcash_settings'
-    verbose_name = _('First Cash Solution')
+    identifier = "firstcash_settings"
+    verbose_name = _("First Cash Solution")
     is_enabled = False
     is_meta = True
 
 
 class ComputopMethod(SuperComputopMethod):
-    identifier = 'firstcash'
+    identifier = "firstcash"
