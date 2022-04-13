@@ -1,0 +1,23 @@
+{% load i18n %}
+
+{% if payment_info %}
+    <dl class="dl-horizontal">
+        {% if "Description" in payment_info %}
+            <dt>{% trans "Message" %}</dt>
+            <dd>{{ payment_info.Description }}</dd>
+        {% endif %}
+        {% if "PayID" in payment_info %}
+            <dt>{% trans "Payment ID" %}</dt>
+            <dd>{{ payment_info.PayID }}</dd>
+        {% endif %}
+        {% if "pt" in payment_info %}
+            <dt>{% trans "Type" %}</dt>
+            <dd>
+                {{ payment_info.pt }}
+                {% if "CCBrand" in payment_info %}
+                    – {{ payment_info.CCBrand }}
+                {% endif %}
+            </dd>
+        {% endif %}
+    </dl>
+{% endif %}

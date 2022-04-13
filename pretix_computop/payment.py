@@ -1,5 +1,6 @@
 import hashlib
 import importlib
+import json
 import requests
 import urllib
 from base64 import b16decode, b16encode
@@ -204,12 +205,41 @@ class ComputopMethod(BasePaymentProvider):
             'URLBack': return_url,
             'Language': payment.order.locale[:2],
             # This breaks the 1CS payment form; needs fixing first on 1CS side. Unknown if it also affects CT
-            # ToDo: The | should not be urlencoded
             # 'PayTypes': self.get_paytypes()
         }
+        data['Description'] = 'Payment process initiated but not completed'
         payment.info_data = data
         payment.save(update_fields=['info'])
-        return self.apiurl + '?' + urlencode(payload)
+        return self.apiurl + '?' + urlencode(payload, safe='|')
+
+    def api_payment_details(self, payment: OrderPayment):
+        return {
+            "id": payment.info_data.get("PayID", None),
+            "payment_method": payment.info_data.get("pt", None)
+        }
+
+    def matching_id(self, payment: OrderPayment):
+        return payment.info_data.get("PayID", None)
+
+    def payment_control_render(self, request: HttpRequest, payment: OrderPayment) -> str:
+        if payment.info:
+            payment_info = json.loads(payment.info)
+        else:
+            payment_info = None
+        template = get_template('pretix_computop/control.html')
+        ctx = {
+            'request': request,
+            'event': self.event,
+            'settings': self.settings,
+            'payment_info': payment_info,
+            'payment': payment,
+            'method': self.method,
+            'provider': self,
+        }
+        return template.render(ctx)
+
+    def payment_control_render_short(self, payment: OrderPayment) -> str:
+        return str(payment.full_id)
 
     def payment_refund_supported(self, payment: OrderPayment) -> bool:
         if 'PayID' in payment.info:
@@ -252,6 +282,9 @@ class ComputopMethod(BasePaymentProvider):
         parsed = urllib.parse.parse_qs(req.text)
         processed = self.parse_data(parsed['Data'][0])
         self.process_result(refund, processed)
+
+    def refund_control_render(self, request: HttpRequest, refund: OrderRefund) -> str:
+        return self.payment_control_render(request, refund)
 
     def check_hash(self, payload_parsed):
         mid = payload_parsed['mid']
