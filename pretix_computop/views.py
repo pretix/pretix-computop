@@ -52,15 +52,17 @@ class ReturnView(ComputopOrderView, View):
 
     def post(self, request, *args, **kwargs):
         if request.POST['Data']:
-            response = self.pprov.parse_data(request.POST.get('Data'))
-            if self.pprov.check_hash(response):
-                try:
+            try:
+                response = self.pprov.parse_data(request.POST.get('Data'))
+                if self.pprov.check_hash(response):
                     self.pprov.process_result(self.payment, response, self.viewsource)
-                except PaymentException as e:
-                    messages.error(self.request, str(e))
-            else:
-                messages.error(self.request, _('Sorry, we could not verify the authenticity of your request. Please '
-                                               'contact the event organizer to get your payment verified manually.'))
+                else:
+                    messages.error(self.request, _('Sorry, we could not verify the authenticity of your request.'
+                                                   'Please contact the event organizer to get your payment verified '
+                                                   'manually.'))
+            except PaymentException as e:
+                messages.error(self.request, str(e))
+                return self._redirect_to_order()
         return self._redirect_to_order()
 
     def get(self, request, *args, **kwargs):
@@ -74,7 +76,10 @@ class NotifyView(ComputopOrderView, View):
 
     def post(self, request, *args, **kwargs):
         if request.POST['Data']:
-            response = self.pprov.parse_data(request.POST.get('Data'))
+            try:
+                response = self.pprov.parse_data(request.POST.get('Data'))
+            except PaymentException:
+                HttpResponseServerError()
             if self.pprov.check_hash(response):
                 try:
                     self.pprov.process_result(self.payment, response, self.viewsource)

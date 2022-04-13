@@ -1,6 +1,6 @@
 import hashlib
 import importlib
-import json
+import logging
 import requests
 import urllib
 from base64 import b16decode, b16encode
@@ -23,6 +23,8 @@ from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.settings import SettingsSandbox
 from pretix.multidomain.urlreverse import build_absolute_uri
 from urllib.parse import parse_qsl, urlencode
+
+logger = logging.getLogger('pretix_computop')
 
 
 class ComputopSettingsHolder(BasePaymentProvider):
@@ -93,6 +95,9 @@ class ComputopMethod(BasePaymentProvider):
                 'method_{}'.format(self.method),
                 as_type=bool)
 
+    def is_allowed(self, request: HttpRequest, total: Decimal) -> bool:
+        return super().is_allowed(request, total) and self._decimal_to_int(total) >= 100
+
     def _encrypt(self, plaintext):
         key = self.settings.get('blowfish_password').encode('UTF-8')
         cipher = Blowfish.new(key, Blowfish.MODE_ECB)
@@ -101,12 +106,18 @@ class ComputopMethod(BasePaymentProvider):
         encrypted_text = cipher.encrypt(padded_text)
         return b16encode(encrypted_text).decode(), len(plaintext)
 
-    def decrypt(self, ciphertext):
+    def _decrypt(self, ciphertext):
         key = self.settings.get('blowfish_password').encode('UTF-8')
         cipher = Blowfish.new(key, Blowfish.MODE_ECB)
         bs = Blowfish.block_size
         ciphertext_bytes = b16decode(ciphertext)
-        decrypted_text = cipher.decrypt(ciphertext_bytes)
+        try:
+            decrypted_text = cipher.decrypt(ciphertext_bytes)
+        except (TypeError, ValueError) as e:
+            logger.exception(e)
+            raise PaymentException(
+                _('We had trouble communicating with the payment service. Please try again and get '
+                  'in touch with us if this problem persists.'))
         try:
             unpadded_text = Padding.unpad(decrypted_text, bs)
         except ValueError:
@@ -115,8 +126,7 @@ class ComputopMethod(BasePaymentProvider):
 
     def _calculate_hmac(self, payment_id='', transaction_id='', amount_or_status='', currency_or_code=''):
         merchant_id = self.settings.get('merchant_id')
-        cat = (str(payment_id) + '*' + str(transaction_id) + '*' + merchant_id + '*' + str(amount_or_status) + '*'
-               + str(currency_or_code))
+        cat = '*'.join([payment_id, transaction_id, merchant_id, amount_or_status, currency_or_code])
         plain = cat.encode('UTF-8')
         secret = self.settings.get('hmac_password').encode('UTF-8')
         h = HMAC.new(secret, digestmod=SHA256)
@@ -222,16 +232,12 @@ class ComputopMethod(BasePaymentProvider):
         return payment.info_data.get("PayID", None)
 
     def payment_control_render(self, request: HttpRequest, payment: OrderPayment) -> str:
-        if payment.info:
-            payment_info = json.loads(payment.info)
-        else:
-            payment_info = None
         template = get_template('pretix_computop/control.html')
         ctx = {
             'request': request,
             'event': self.event,
             'settings': self.settings,
-            'payment_info': payment_info,
+            'payment_info': payment.info_data,
             'payment': payment,
             'method': self.method,
             'provider': self,
@@ -239,7 +245,17 @@ class ComputopMethod(BasePaymentProvider):
         return template.render(ctx)
 
     def payment_control_render_short(self, payment: OrderPayment) -> str:
-        return str(payment.full_id)
+        payment_info = payment.info_data
+        r = payment_info.get('PayID', '')
+        if payment_info.get('pt'):
+            if r:
+                r += ' / '
+            r += payment_info.get('pt')
+        if payment_info.get('CCBrand'):
+            if r:
+                r += ' / '
+            r += payment_info.get('CCBrand')
+        return r
 
     def payment_refund_supported(self, payment: OrderPayment) -> bool:
         if 'PayID' in payment.info:
@@ -313,7 +329,7 @@ class ComputopMethod(BasePaymentProvider):
             return self.method
 
     def parse_data(self, data):
-        payload = self.decrypt(str(data))
+        payload = self._decrypt(str(data))
         return dict(parse_qsl(payload))
 
     def process_result(self, payment_or_refund, data, datasource=None):
