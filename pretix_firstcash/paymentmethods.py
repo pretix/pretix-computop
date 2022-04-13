@@ -10,8 +10,8 @@ supported_methods = [
     'CC',
 
     # Scheme
-    'ApplePay',
-    'GooglePay',
+    # 'ApplePay',  # Coming soon
+    # 'GooglePay',  # Coming soon
 
     # The rest
     'EDD',
@@ -20,31 +20,12 @@ supported_methods = [
     'Sofort',
     'giropay',
     'paydirekt',
-    'Alipay',
-    'BanconPP',
-    'BankTranPP',
-    'BitPayPP',
-    'DragonPP',
-    'ENETSPP',
-    'FinOBTPP',
-    'IndoATMPP',
-    'MultibanPP',
-    'MyBankPP',
-    'MyClearPP',
-    'P24PP',
-    'POLiPP',
+    # 'Alipay',  # Coming soon
     'POSTFINPP',
-    'PSCPP',
-    'RHBBankPP',
-    'SafetyPPP',
-    'SevenElePP',
-    'SkrillPP',
-    'TrustPayPP',
-    'B4Payment',
-    'BoletoPP',
-    'CUPPP',
+    # 'CUPPP',  # Coming soon
     'EPS',
-    'WechatPP',
+    # 'WechatPP',  # Coming soon
+    # amazonpay coming soon, too - but not a HPP-method?
 ]
 payment_methods = [item for item in payment_methods_repo if item.get('method') in supported_methods]
 
