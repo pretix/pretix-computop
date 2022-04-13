@@ -12,6 +12,7 @@ from django import forms
 from django.conf import settings
 from django.http import HttpRequest
 from django.template.loader import get_template
+from django.utils.safestring import mark_safe
 from django.utils.timezone import now
 from django.utils.translation import gettext_lazy as _
 from pretix.base.decimal import round_decimal
@@ -144,6 +145,18 @@ class ComputopMethod(BasePaymentProvider):
         ctx = {'request': request}
         return template.render(ctx)
 
+    def test_mode_message(self) -> str:
+        return mark_safe(
+            _(
+                "The {ident} plugin is operating in test mode. You can use one of <a {cardargs}>many test "
+                "cards</a> to perform a transaction. No money will actually be transferred."
+            ).format(
+                ident=self.verbose_name,
+                cardargs='href="https://developer.computop.com/pages/viewpage.action?pageId=26247897" '
+                'target="_blank"',
+            )
+        )
+
     def execute_payment(self, request: HttpRequest, payment: OrderPayment) -> str:
         ident = self.identifier.split('_')[0]
         trans_id = payment.full_id
@@ -163,7 +176,11 @@ class ComputopMethod(BasePaymentProvider):
         data = {
             'MerchantID': self.settings.get('merchant_id'),
             'TransID': trans_id,
-            'OrderDesc': 'Order {}-{}'.format(self.event.slug.upper(), payment.full_id),
+            'OrderDesc': '{}Order {}-{}'.format(
+                'Test:0000 ' if payment.order.testmode else '',
+                self.event.slug.upper(),
+                payment.full_id
+            ),
             'MsgVer': '2.0',
             'RefNr': ref_nr,
             'Amount': self._decimal_to_int(payment.amount),
