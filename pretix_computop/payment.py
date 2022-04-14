@@ -181,6 +181,7 @@ class ComputopMethod(BasePaymentProvider):
             "URLSuccess": return_url,
             "URLFailure": return_url,
             "URLNotify": notify_url,
+            "URLBack": return_url,
             "MAC": self._calculate_hmac(
                 transaction_id=trans_id,
                 amount_or_status=str(self._decimal_to_int(payment.amount)),
@@ -188,14 +189,11 @@ class ComputopMethod(BasePaymentProvider):
             ),
             "Response": "encrypt",
         }
-        encrypted_data = self._encrypt(urlencode(data))
+        encrypted_data = self._encrypt(urlencode(data, safe=":/"))
         payload = {
             "MerchantID": self.settings.get("merchant_id"),
             "Len": encrypted_data[1],
             "Data": encrypted_data[0],
-            # Could be placed in the encrypted data section; however this breaks the 1CS payment form.
-            # Unknown if this also affects CT.
-            "URLBack": return_url,
             "Language": payment.order.locale[:2],
             # This breaks the 1CS payment form; needs fixing first on 1CS side. Unknown if it also affects CT
             # 'PayTypes': self._get_paytypes()
