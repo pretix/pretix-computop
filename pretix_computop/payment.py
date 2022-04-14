@@ -195,8 +195,10 @@ class ComputopMethod(BasePaymentProvider):
             "Len": encrypted_data[1],
             "Data": encrypted_data[0],
             "Language": payment.order.locale[:2],
-            # This breaks the 1CS payment form; needs fixing first on 1CS side. Unknown if it also affects CT
-            # 'PayTypes': self._get_paytypes()
+            # This enforces the 1CS dropdown payment form; logo form needs fixing first on 1CS side.
+            # Unknown if it also affects CT
+            "template": "1cs_paymentpagedropdown_v1",
+            'PayTypes': self._get_paytypes()
         }
         data["Description"] = "Payment process initiated but not completed"
         payment.info_data = data
