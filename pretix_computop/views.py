@@ -61,7 +61,7 @@ class ReturnView(ComputopOrderView, View):
     viewsource = "return_view"
 
     def post(self, request, *args, **kwargs):
-        if request.POST["Data"]:
+        if request.POST.get("Data"):
             try:
                 response = self.pprov.parse_data(request.POST.get("Data"))
                 if self.pprov.check_hash(response):
@@ -89,7 +89,7 @@ class NotifyView(ComputopOrderView, View):
     viewsource = "notify_view"
 
     def post(self, request, *args, **kwargs):
-        if request.POST["Data"]:
+        if request.POST.get("Data"):
             try:
                 response = self.pprov.parse_data(request.POST.get("Data"))
             except PaymentException:
