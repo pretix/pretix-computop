@@ -224,7 +224,7 @@ def get_payment_method_classes(brand, payment_methods, baseclass, settingsholder
                         else "",
                         m["verbose_name"],
                     ),
-                    help_text=m["help_text"] if "help_text" in m else "",
+                    help_text=_("Needs to be enabled in your payment provider's account first."),
                     required=False,
                 ),
             )
