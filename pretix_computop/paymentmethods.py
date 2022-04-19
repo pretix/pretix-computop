@@ -1,7 +1,7 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from .payment import ComputopMethod, ComputopSettingsHolder
+from .payment import ComputopMethod, ComputopSettingsHolder, ComputopEDD
 
 payment_methods = [
     {
@@ -27,6 +27,7 @@ payment_methods = [
         "type": "other",
         "public_name": _("SEPA Direct Debit"),
         "verbose_name": _("SEPA Direct Debit"),
+        "baseclass": ComputopEDD
     },
     {
         "method": "PayPal",
@@ -229,6 +230,14 @@ def get_payment_method_classes(brand, payment_methods, baseclass, settingsholder
                 ),
             )
         )
+        if "baseclass" in m:
+            for field in m["baseclass"].extra_form_fields:
+                settingsholder.payment_methods_settingsholder.append(
+                    (
+                        "method_{}_{}".format(m["method"], field[0]),
+                        field[1]
+                    )
+                )
 
     # We do not want the "scheme"-methods listed as a payment-method, since they are covered by the meta methods
     return [settingsholder] + [

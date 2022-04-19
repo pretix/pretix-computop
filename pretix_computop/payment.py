@@ -143,52 +143,7 @@ class ComputopMethod(BasePaymentProvider):
         )
 
     def execute_payment(self, request: HttpRequest, payment: OrderPayment) -> str:
-        ident = self.identifier.split("_")[0]
-        trans_id = payment.full_id
-        ref_nr = payment.full_id
-        return_url = build_absolute_uri(
-            self.event,
-            "plugins:pretix_{}:return".format(ident),
-            kwargs={
-                "order": payment.order.code,
-                "hash": hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
-                "payment": payment.pk,
-                "payment_provider": ident,
-            },
-        )
-        notify_url = build_absolute_uri(
-            self.event,
-            "plugins:pretix_{}:notify".format(ident),
-            kwargs={
-                "order": payment.order.code,
-                "hash": hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
-                "payment": payment.pk,
-                "payment_provider": ident,
-            },
-        )
-        data = {
-            "MerchantID": self.settings.get("merchant_id"),
-            "TransID": trans_id,
-            "OrderDesc": "{}Order {}-{}".format(
-                "Test:0000 " if payment.order.testmode else "",
-                self.event.slug.upper(),
-                payment.full_id,
-            ),
-            "MsgVer": "2.0",
-            "RefNr": ref_nr,
-            "Amount": self._decimal_to_int(payment.amount),
-            "Currency": self.event.currency,
-            "URLSuccess": return_url,
-            "URLFailure": return_url,
-            "URLNotify": notify_url,
-            "URLBack": return_url,
-            "MAC": self._calculate_hmac(
-                transaction_id=trans_id,
-                amount_or_status=str(self._decimal_to_int(payment.amount)),
-                currency_or_code=self.event.currency,
-            ),
-            "Response": "encrypt",
-        }
+        data = self._get_payment_data(payment)
         encrypted_data = self._encrypt(urlencode(data, safe=":/"))
         payload = {
             "MerchantID": self.settings.get("merchant_id"),
@@ -198,7 +153,7 @@ class ComputopMethod(BasePaymentProvider):
             # This enforces the 1CS dropdown payment form; logo form needs fixing first on 1CS side.
             # Unknown if it also affects CT
             "template": "1cs_paymentpagedropdown_v1",
-            'PayTypes': self._get_paytypes()
+            "PayTypes": self._get_paytypes()
         }
         data["Description"] = "Payment process initiated but not completed"
         payment.info_data = data
@@ -449,3 +404,71 @@ class ComputopMethod(BasePaymentProvider):
     def _decimal_to_int(self, amount):
         places = settings.CURRENCY_PLACES.get(self.event.currency, 2)
         return int(amount * 10**places)
+
+    def _get_payment_data(self, payment: OrderPayment):
+        ident = self.identifier.split("_")[0]
+        trans_id = payment.full_id
+        ref_nr = payment.full_id
+        return_url = build_absolute_uri(
+            self.event,
+            "plugins:pretix_{}:return".format(ident),
+            kwargs={
+                "order": payment.order.code,
+                "hash": hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
+                "payment": payment.pk,
+                "payment_provider": ident,
+            },
+        )
+        notify_url = build_absolute_uri(
+            self.event,
+            "plugins:pretix_{}:notify".format(ident),
+            kwargs={
+                "order": payment.order.code,
+                "hash": hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
+                "payment": payment.pk,
+                "payment_provider": ident,
+            },
+        )
+        data = {
+            "MerchantID": self.settings.get("merchant_id"),
+            "TransID": trans_id,
+            "OrderDesc": "{}Order {}-{}".format(
+                "Test:0000 " if payment.order.testmode else "",
+                self.event.slug.upper(),
+                payment.full_id,
+            ),
+            "OrderDesc2": "",
+            "MsgVer": "2.0",
+            "RefNr": ref_nr,
+            "Amount": self._decimal_to_int(payment.amount),
+            "Currency": self.event.currency,
+            "URLSuccess": return_url,
+            "URLFailure": return_url,
+            "URLNotify": notify_url,
+            "URLBack": return_url,
+            "MAC": self._calculate_hmac(
+                transaction_id=trans_id,
+                amount_or_status=str(self._decimal_to_int(payment.amount)),
+                currency_or_code=self.event.currency,
+            ),
+            "Response": "encrypt",
+        }
+        return data
+
+
+class ComputopEDD(ComputopMethod):
+    extra_form_fields = [
+        (
+            "mandate_id",
+            forms.CharField(
+                label=_("Mandate ID"),
+                validators=(),
+                help_text=_("Your Mandate ID is only mandatory if you want to use SEPA Direct Debit"),
+            ),
+        )
+    ]
+
+    def _get_payment_data(self, payment: OrderPayment):
+        data = super()._get_payment_data(payment)
+        data["MandateID"] = self.settings.get("method_EDD_mandate_id")
+        return data
