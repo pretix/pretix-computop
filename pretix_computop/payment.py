@@ -457,18 +457,10 @@ class ComputopMethod(BasePaymentProvider):
 
 
 class ComputopEDD(ComputopMethod):
-    extra_form_fields = [
-        (
-            "mandate_id",
-            forms.CharField(
-                label=_("Mandate ID"),
-                validators=(),
-                help_text=_("Your Mandate ID is only mandatory if you want to use SEPA Direct Debit"),
-            ),
-        )
-    ]
+    extra_form_fields = []
 
     def _get_payment_data(self, payment: OrderPayment):
         data = super()._get_payment_data(payment)
-        data["MandateID"] = self.settings.get("method_EDD_mandate_id")
+        data["MandateID"] = payment.full_id
+        data["DtOfSgntr"] = payment.created.strftime("%d.%m.%Y")
         return data
