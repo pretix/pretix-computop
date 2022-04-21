@@ -46,7 +46,7 @@ License
 -------
 
 
-Copyright 2022 Phin Wolkwitz
+Copyright 2022 rami.io GmbH
 
 Released under the terms of the Apache License 2.0
 
