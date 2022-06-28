@@ -60,10 +60,10 @@ class ReturnView(ComputopOrderView, View):
     template_name = "pretix_computop/return.html"
     viewsource = "return_view"
 
-    def post(self, request, *args, **kwargs):
-        if request.POST.get("Data"):
+    def read_and_process(self, request_body):
+        if request_body.get("Data"):
             try:
-                response = self.pprov.parse_data(request.POST.get("Data"))
+                response = self.pprov.parse_data(request_body.get("Data"))
                 if self.pprov.check_hash(response):
                     self.pprov.process_result(self.payment, response, self.viewsource)
                 else:
@@ -77,9 +77,13 @@ class ReturnView(ComputopOrderView, View):
             except PaymentException as e:
                 messages.error(self.request, str(e))
                 return self._redirect_to_order()
+
+    def post(self, request, *args, **kwargs):
+        self.read_and_process(request.POST)
         return self._redirect_to_order()
 
     def get(self, request, *args, **kwargs):
+        self.read_and_process(request.GET)
         return self._redirect_to_order()
 
 
