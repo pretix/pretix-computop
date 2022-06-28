@@ -1,7 +1,7 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from .payment import ComputopMethod, ComputopSettingsHolder, ComputopEDD
+from .payment import ComputopMethod, ComputopSettingsHolder, ComputopEDD, ComputopCC, ComputopGiropay, ComputopEPS
 
 payment_methods = [
     {
@@ -9,6 +9,7 @@ payment_methods = [
         "type": "meta",
         "public_name": _("Credit card"),
         "verbose_name": _("Credit card"),
+        "baseclass": ComputopCC
     },
     {
         "method": "ApplePay",
@@ -52,6 +53,7 @@ payment_methods = [
         "type": "other",
         "public_name": _("giropay"),
         "verbose_name": _("giropay"),
+        "baseclass": ComputopGiropay
     },
     {
         "method": "paydirekt",
@@ -202,6 +204,7 @@ payment_methods = [
         "type": "other",
         "public_name": _("EPS"),
         "verbose_name": _("EPS"),
+        "baseclass": ComputopEPS
     },
     {
         "method": "WechatPP",
