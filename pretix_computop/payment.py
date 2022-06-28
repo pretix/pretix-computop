@@ -45,20 +45,23 @@ class ComputopSettingsHolder(BasePaymentProvider):
                 "merchant_id",
                 forms.CharField(
                     label=_("Merchant ID"),
+                    help_text=_("as sent to you by mail from your payment provider"),
                     validators=(),
                 ),
             ),
             (
                 "blowfish_password",
                 SecretKeySettingsField(
-                    label=_("Blowfish Password"),
+                    label=_("Encryption key"),
+                    help_text=_("also called Blowfish-password, as sent to you by mail from your payment provider"),
                     validators=(),
                 ),
             ),
             (
                 "hmac_password",
                 SecretKeySettingsField(
-                    label=_("Secret key"),
+                    label=_("HMAC key"),
+                    help_text=_("as sent to you by mail from your payment provider"),
                     validators=(),
                 ),
             ),
