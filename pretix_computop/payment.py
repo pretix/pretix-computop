@@ -207,21 +207,7 @@ class ComputopMethod(BasePaymentProvider):
         return False
 
     def execute_refund(self, refund: OrderRefund):
-        data = {
-            "MerchantID": self.settings.get("merchant_id"),
-            "Amount": self._decimal_to_int(refund.amount),
-            "Currency": self.event.currency,
-            "MAC": self._calculate_hmac(
-                payment_id=refund.payment.info_data["PayID"],
-                transaction_id=refund.full_id,
-                amount_or_status=str(self._decimal_to_int(refund.amount)),
-                currency_or_code=self.event.currency,
-            ),
-            "PayID": refund.payment.info_data["PayID"],
-            "TransID": refund.full_id,
-            "RefNr": refund.full_id,
-            "OrderDesc": "Order {}-{}".format(self.event.slug.upper(), refund.full_id),
-        }
+        data = self._get_refund_data(refund)
 
         encrypted_data = self._encrypt(urlencode(data))
         payload = {
@@ -430,6 +416,22 @@ class ComputopMethod(BasePaymentProvider):
         }
         return data
 
+    def _get_refund_data(self, refund: OrderRefund):
+        data = {
+            "MerchantID": self.settings.get("merchant_id"),
+            "Amount": self._decimal_to_int(refund.amount),
+            "Currency": self.event.currency,
+            "MAC": self._calculate_hmac(
+                payment_id=refund.payment.info_data["PayID"],
+                transaction_id=refund.full_id,
+                amount_or_status=str(self._decimal_to_int(refund.amount)),
+                currency_or_code=self.event.currency,
+            ),
+            "PayID": refund.payment.info_data["PayID"],
+            "TransID": refund.full_id,
+        }
+        return data
+
 
 class ComputopEDD(ComputopMethod):
     apiurl = "https://www.computop-paygate.com/paysdd.aspx"
@@ -442,6 +444,11 @@ class ComputopEDD(ComputopMethod):
         data["DtOfSgntr"] = payment.created.strftime("%d.%m.%Y")
         return data
 
+    def get_refund_data(self, refund: OrderRefund):
+        data = super()._get_refund_data(refund)
+        data["RefNr"] = refund.full_id  # not for EVO
+        return data
+
 
 class ComputopCC(ComputopMethod):
     apiurl = "https://www.computop-paygate.com/payssl.aspx"
@@ -452,12 +459,13 @@ class ComputopCC(ComputopMethod):
         data["msgver"] = "2.0"
         return data
 
+    def get_refund_data(self, refund: OrderRefund):
+        data = super()._get_refund_data(refund)
+        data["RefNr"] = refund.full_id  # not for EVO
+        data["OrderDesc"] = "Order {}-{}".format(self.event.slug.upper(), refund.full_id)
+        return data
+
 
 class ComputopGiropay(ComputopMethod):
     apiurl = "https://www.computop-paygate.com/giropay.aspx"
-    extra_form_fields = []
-
-
-class ComputopEPS(ComputopMethod):
-    apiurl = "https://www.computop-paygate.com/eps.aspx"
     extra_form_fields = []
