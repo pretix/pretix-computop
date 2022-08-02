@@ -1,7 +1,7 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from .payment import ComputopMethod, ComputopSettingsHolder, ComputopEDD, ComputopCC, ComputopGiropay, ComputopEPS
+from .payment import ComputopMethod, ComputopSettingsHolder, ComputopEDD, ComputopCC, ComputopGiropay
 
 payment_methods = [
     {
