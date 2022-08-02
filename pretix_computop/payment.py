@@ -45,20 +45,23 @@ class ComputopSettingsHolder(BasePaymentProvider):
                 "merchant_id",
                 forms.CharField(
                     label=_("Merchant ID"),
+                    help_text=_("as sent to you by mail from your payment provider"),
                     validators=(),
                 ),
             ),
             (
                 "blowfish_password",
                 SecretKeySettingsField(
-                    label=_("Blowfish Password"),
+                    label=_("Encryption key"),
+                    help_text=_("also called Blowfish-password, as sent to you by mail from your payment provider"),
                     validators=(),
                 ),
             ),
             (
                 "hmac_password",
                 SecretKeySettingsField(
-                    label=_("Secret key"),
+                    label=_("HMAC key"),
+                    help_text=_("as sent to you by mail from your payment provider"),
                     validators=(),
                 ),
             ),
@@ -150,10 +153,6 @@ class ComputopMethod(BasePaymentProvider):
             "Len": encrypted_data[1],
             "Data": encrypted_data[0],
             "Language": payment.order.locale[:2],
-            # This enforces the 1CS dropdown payment form; logo form needs fixing first on 1CS side.
-            # Unknown if it also affects CT
-            "template": "1cs_paymentpagedropdown_v1",
-            "PayTypes": self._get_paytypes()
         }
         data["Description"] = "Payment process initiated but not completed"
         payment.info_data = data
@@ -208,21 +207,7 @@ class ComputopMethod(BasePaymentProvider):
         return False
 
     def execute_refund(self, refund: OrderRefund):
-        data = {
-            "MerchantID": self.settings.get("merchant_id"),
-            "Amount": self._decimal_to_int(refund.amount),
-            "Currency": self.event.currency,
-            "MAC": self._calculate_hmac(
-                payment_id=refund.payment.info_data["PayID"],
-                transaction_id=refund.full_id,
-                amount_or_status=str(self._decimal_to_int(refund.amount)),
-                currency_or_code=self.event.currency,
-            ),
-            "PayID": refund.payment.info_data["PayID"],
-            "TransID": refund.full_id,
-            "RefNr": refund.full_id,
-            "OrderDesc": "Order {}-{}".format(self.event.slug.upper(), refund.full_id),
-        }
+        data = self._get_refund_data(refund)
 
         encrypted_data = self._encrypt(urlencode(data))
         payload = {
@@ -325,28 +310,6 @@ class ComputopMethod(BasePaymentProvider):
         else:
             raise PaymentException(_("We had trouble processing your transaction."))
 
-    def _get_paytypes(self):
-        if self.type == "meta":
-            paytypes = []
-            module = importlib.import_module(
-                __name__.replace("computop", self.identifier.split("_")[0]).replace(
-                    ".payment", ".paymentmethods"
-                )
-            )
-            for method in list(
-                filter(
-                    lambda d: d["type"] in ["meta", "scheme"], module.payment_methods
-                )
-            ):
-                if self.settings.get("_enabled", as_type=bool) and self.settings.get(
-                    "method_{}".format(method["method"]), as_type=bool
-                ):
-                    paytypes.append(method["method"])
-
-            return "|".join(paytypes)
-        else:
-            return self.method
-
     def _encrypt(self, plaintext):
         key = self.settings.get("blowfish_password").encode("UTF-8")
         cipher = Blowfish.new(key, Blowfish.MODE_ECB)
@@ -437,8 +400,6 @@ class ComputopMethod(BasePaymentProvider):
                 self.event.slug.upper(),
                 payment.full_id,
             ),
-            "OrderDesc2": "",
-            "MsgVer": "2.0",
             "RefNr": ref_nr,
             "Amount": self._decimal_to_int(payment.amount),
             "Currency": self.event.currency,
@@ -455,12 +416,56 @@ class ComputopMethod(BasePaymentProvider):
         }
         return data
 
+    def _get_refund_data(self, refund: OrderRefund):
+        data = {
+            "MerchantID": self.settings.get("merchant_id"),
+            "Amount": self._decimal_to_int(refund.amount),
+            "Currency": self.event.currency,
+            "MAC": self._calculate_hmac(
+                payment_id=refund.payment.info_data["PayID"],
+                transaction_id=refund.full_id,
+                amount_or_status=str(self._decimal_to_int(refund.amount)),
+                currency_or_code=self.event.currency,
+            ),
+            "PayID": refund.payment.info_data["PayID"],
+            "TransID": refund.full_id,
+        }
+        return data
+
 
 class ComputopEDD(ComputopMethod):
+    apiurl = "https://www.computop-paygate.com/paysdd.aspx"
     extra_form_fields = []
 
     def _get_payment_data(self, payment: OrderPayment):
         data = super()._get_payment_data(payment)
+        data["OrderDesc2"] = ""
         data["MandateID"] = payment.full_id
         data["DtOfSgntr"] = payment.created.strftime("%d.%m.%Y")
         return data
+
+    def get_refund_data(self, refund: OrderRefund):
+        data = super()._get_refund_data(refund)
+        data["RefNr"] = refund.full_id  # not for EVO
+        return data
+
+
+class ComputopCC(ComputopMethod):
+    apiurl = "https://www.computop-paygate.com/payssl.aspx"
+    extra_form_fields = []
+
+    def _get_payment_data(self, payment: OrderPayment):
+        data = super()._get_payment_data(payment)
+        data["msgver"] = "2.0"
+        return data
+
+    def get_refund_data(self, refund: OrderRefund):
+        data = super()._get_refund_data(refund)
+        data["RefNr"] = refund.full_id  # not for EVO
+        data["OrderDesc"] = "Order {}-{}".format(self.event.slug.upper(), refund.full_id)
+        return data
+
+
+class ComputopGiropay(ComputopMethod):
+    apiurl = "https://www.computop-paygate.com/giropay.aspx"
+    extra_form_fields = []
