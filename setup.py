@@ -34,7 +34,7 @@ setup(
     author="Phin Wolkwitz",
     author_email="wolkwitz@rami.io",
     license="Apache",
-    install_requires=["pycryptodome==3.14.*"],
+    install_requires=["pycryptodome"],
     packages=find_packages(exclude=["tests", "tests.*"]),
     include_package_data=True,
     cmdclass=cmdclass,
