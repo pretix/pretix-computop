@@ -1,9 +1,9 @@
 import hashlib
-from cached_property import cached_property
 from django.contrib import messages
 from django.http import Http404, HttpResponse, HttpResponseServerError
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.decorators import method_decorator
+from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
