@@ -1,21 +1,21 @@
-from django.conf.urls import include, url
+from django.urls import include, path, re_path
 
 from .views import NotifyView, ReturnView
 
 
 def get_event_patterns(brand):
     return [
-        url(
+        re_path(
             r"^(?P<payment_provider>{})/".format(brand),
             include(
                 [
-                    url(
-                        r"^return/(?P<order>[^/]+)/(?P<hash>[^/]+)/(?P<payment>[^/]+)/$",
+                    path(
+                        "return/<str:order>/<str:hash>/<str:payment>/",
                         ReturnView.as_view(),
                         name="return",
                     ),
-                    url(
-                        r"^notify/(?P<order>[^/]+)/(?P<hash>[^/]+)/(?P<payment>[^/]+)/$",
+                    path(
+                        "notify/<str:order>/<str:hash>/<str:payment>/",
                         NotifyView.as_view(),
                         name="notify",
                     ),

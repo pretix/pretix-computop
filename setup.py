@@ -4,7 +4,7 @@ from distutils.command.build import build
 from django.core import management
 from setuptools import find_packages, setup
 
-from pretix_firstcash import __version__
+from pretix_computop import __version__
 
 
 try:
