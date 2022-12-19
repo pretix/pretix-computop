@@ -8,6 +8,7 @@ except ImportError:
 
 
 class PluginApp(PluginConfig):
+    default = True
     name = "pretix_firstcash"
     verbose_name = "First Cash Solution payments for pretix"
 
