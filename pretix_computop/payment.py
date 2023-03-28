@@ -168,6 +168,9 @@ class ComputopMethod(BasePaymentProvider):
     def matching_id(self, payment: OrderPayment):
         return payment.info_data.get("PayID", None)
 
+    def refund_matching_id(self, refund: OrderRefund):
+        return refund.info_data.get("PayID", None)
+
     def payment_control_render(
         self, request: HttpRequest, payment: OrderPayment
     ) -> str:
