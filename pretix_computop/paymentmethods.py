@@ -1,7 +1,13 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from .payment import ComputopMethod, ComputopSettingsHolder, ComputopEDD, ComputopCC, ComputopGiropay
+from .payment import (
+    ComputopCC,
+    ComputopEDD,
+    ComputopGiropay,
+    ComputopMethod,
+    ComputopSettingsHolder,
+)
 
 payment_methods = [
     {
@@ -9,7 +15,7 @@ payment_methods = [
         "type": "meta",
         "public_name": _("Credit card"),
         "verbose_name": _("Credit card"),
-        "baseclass": ComputopCC
+        "baseclass": ComputopCC,
     },
     # {
     #     "method": "ApplePay",
@@ -28,7 +34,7 @@ payment_methods = [
         "type": "other",
         "public_name": _("SEPA Direct Debit"),
         "verbose_name": _("SEPA Direct Debit"),
-        "baseclass": ComputopEDD
+        "baseclass": ComputopEDD,
     },
     # {
     #     "method": "PayPal",
@@ -53,7 +59,7 @@ payment_methods = [
         "type": "other",
         "public_name": _("giropay"),
         "verbose_name": _("giropay"),
-        "baseclass": ComputopGiropay
+        "baseclass": ComputopGiropay,
     },
     # {
     #     "method": "paydirekt",
@@ -223,12 +229,16 @@ def get_payment_method_classes(brand, payment_methods, baseclass, settingsholder
                 "method_{}".format(m["method"]),
                 forms.BooleanField(
                     label="{} {}".format(
-                        '<span class="fa fa-credit-card"></span>'
-                        if m["type"] in ["scheme", "meta"]
-                        else "",
+                        (
+                            '<span class="fa fa-credit-card"></span>'
+                            if m["type"] in ["scheme", "meta"]
+                            else ""
+                        ),
                         m["verbose_name"],
                     ),
-                    help_text=_("Needs to be enabled in your payment provider's account first."),
+                    help_text=_(
+                        "Needs to be enabled in your payment provider's account first."
+                    ),
                     required=False,
                 ),
             )
@@ -236,10 +246,7 @@ def get_payment_method_classes(brand, payment_methods, baseclass, settingsholder
         if "baseclass" in m:
             for field in m["baseclass"].extra_form_fields:
                 settingsholder.payment_methods_settingsholder.append(
-                    (
-                        "method_{}_{}".format(m["method"], field[0]),
-                        field[1]
-                    )
+                    ("method_{}_{}".format(m["method"], field[0]), field[1])
                 )
 
     # We do not want the "scheme"-methods listed as a payment-method, since they are covered by the meta methods

@@ -1,4 +1,5 @@
 from django.utils.translation import gettext_lazy
+
 from . import __version__
 
 try:
@@ -16,9 +17,7 @@ class PluginApp(PluginConfig):
     class PretixPluginMeta:
         name = gettext_lazy("Computop")
         author = "pretix team"
-        description = gettext_lazy(
-            "Use Computop-based payment providers"
-        )
+        description = gettext_lazy("Use Computop-based payment providers")
         visible = True
         version = __version__
         category = "PAYMENT"
@@ -27,4 +26,3 @@ class PluginApp(PluginConfig):
 
     def ready(self):
         from . import signals  # NOQA
-

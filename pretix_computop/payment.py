@@ -53,7 +53,9 @@ class ComputopSettingsHolder(BasePaymentProvider):
                 "blowfish_password",
                 SecretKeySettingsField(
                     label=_("Encryption key"),
-                    help_text=_("also called Blowfish-password, as sent to you by mail from your payment provider"),
+                    help_text=_(
+                        "also called Blowfish-password, as sent to you by mail from your payment provider"
+                    ),
                     validators=(),
                 ),
             ),
@@ -465,7 +467,9 @@ class ComputopCC(ComputopMethod):
     def get_refund_data(self, refund: OrderRefund):
         data = super()._get_refund_data(refund)
         data["RefNr"] = refund.full_id  # not for EVO
-        data["OrderDesc"] = "Order {}-{}".format(self.event.slug.upper(), refund.full_id)
+        data["OrderDesc"] = "Order {}-{}".format(
+            self.event.slug.upper(), refund.full_id
+        )
         return data
 
 

@@ -1,1 +1,1 @@
-from pretix_computop import __version__
+from pretix_computop import __version__  # noqa
