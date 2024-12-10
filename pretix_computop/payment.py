@@ -19,7 +19,7 @@ from django.utils.translation import gettext_lazy as _
 from pretix.base.decimal import round_decimal
 from pretix.base.forms import SecretKeySettingsField
 from pretix.base.models import Event, Order, OrderPayment, OrderRefund
-from pretix.base.payment import BasePaymentProvider, PaymentException
+from pretix.base.payment import BasePaymentProvider, PaymentException, WalletQueries
 from pretix.base.settings import SettingsSandbox
 from pretix.multidomain.urlreverse import build_absolute_uri
 from urllib.parse import parse_qsl, urlencode
@@ -457,7 +457,24 @@ class ComputopEDD(ComputopMethod):
 
 class ComputopCC(ComputopMethod):
     apiurl = "https://www.computop-paygate.com/payssl.aspx"
-    extra_form_fields = []
+    extra_form_fields = [
+        (
+            "walletdetection",
+            forms.BooleanField(
+                label=mark_safe(
+                    _('Check for Apple Pay/Google Pay')
+                    + ' '
+                    + '<span class="label label-info">{}</span>'.format(_('experimental'))
+                ),
+                help_text=_("pretix will attempt to check if the customer's web browser supports wallet-based payment "
+                            "methods like Apple Pay or Google Pay and display them prominently with the credit card "
+                            "payment method. This detection does not take into consideration if Google Pay/Apple Pay "
+                            "has been disabled in the Stripe Dashboard."),
+                initial=True,
+                required=False,
+            )
+        ),
+    ]
 
     def _get_payment_data(self, payment: OrderPayment):
         data = super()._get_payment_data(payment)
@@ -471,6 +488,12 @@ class ComputopCC(ComputopMethod):
             self.event.slug.upper(), refund.full_id
         )
         return data
+
+    @property
+    def walletqueries(self):
+        if self.settings.get("method_CC_walletdetection", True, as_type=bool):
+            return [WalletQueries.APPLEPAY, WalletQueries.GOOGLEPAY]
+        return []
 
 
 class ComputopGiropay(ComputopMethod):
