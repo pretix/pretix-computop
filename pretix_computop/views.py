@@ -1,5 +1,6 @@
 import hashlib
 from django.contrib import messages
+from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseServerError
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.decorators import method_decorator
@@ -7,8 +8,9 @@ from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from pretix.base.models import Order
+from pretix.base.models import Order, OrderPayment
 from pretix.base.payment import PaymentException
+from pretix.helpers import OF_SELF
 from pretix.multidomain.urlreverse import eventreverse
 
 
@@ -32,17 +34,14 @@ class ComputopOrderView:
                 raise Http404("Unknown order")
         return super().dispatch(request, *args, **kwargs)
 
-    @cached_property
-    def pprov(self):
-        return self.payment.payment_provider
-
-    @property
-    def payment(self):
-        return get_object_or_404(
-            self.order.payments,
-            pk=self.kwargs["payment"],
-            provider__istartswith=self.kwargs["payment_provider"],
-        )
+    def get_payment_for_update(self) -> OrderPayment:
+        try:
+            return self.order.payments.select_for_update(of=OF_SELF).get(
+                pk=self.kwargs["payment"],
+                provider__istartswith=self.kwargs["payment_provider"],
+            )
+        except OrderPayment.DoesNotExist:
+            raise Http404("Unknown payment")
 
     def _redirect_to_order(self):
         return redirect(
@@ -62,10 +61,13 @@ class ReturnView(ComputopOrderView, View):
 
     def read_and_process(self, request_body):
         if request_body.get("Data"):
+            payment = self.get_payment_for_update()
+            pprov = payment.payment_provider
+
             try:
-                response = self.pprov.parse_data(request_body.get("Data"))
-                if self.pprov.check_hash(response):
-                    self.pprov.process_result(self.payment, response, self.viewsource)
+                response = pprov.parse_data(request_body.get("Data"))
+                if pprov.check_hash(response):
+                    pprov.process_result(payment, response, self.viewsource)
                 else:
                     messages.error(
                         self.request,
@@ -78,10 +80,12 @@ class ReturnView(ComputopOrderView, View):
                 messages.error(self.request, str(e))
                 return self._redirect_to_order()
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
         self.read_and_process(request.POST)
         return self._redirect_to_order()
 
+    @transaction.atomic
     def get(self, request, *args, **kwargs):
         self.read_and_process(request.GET)
         return self._redirect_to_order()
@@ -92,15 +96,20 @@ class NotifyView(ComputopOrderView, View):
     template_name = "pretix_computop/return.html"
     viewsource = "notify_view"
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
         if request.POST.get("Data"):
+            payment = self.get_payment_for_update()
+            pprov = payment.payment_provider
+
             try:
-                response = self.pprov.parse_data(request.POST.get("Data"))
+                response = pprov.parse_data(request.POST.get("Data"))
             except PaymentException:
-                HttpResponseServerError()
-            if self.pprov.check_hash(response):
+                return HttpResponseServerError()
+            if pprov.check_hash(response):
                 try:
-                    self.pprov.process_result(self.payment, response, self.viewsource)
+                    payment = self.get_payment_for_update()
+                    pprov.process_result(payment, response, self.viewsource)
                 except PaymentException:
                     return HttpResponseServerError()
         return HttpResponse("[accepted]", status=200)
