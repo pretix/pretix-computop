@@ -22,7 +22,7 @@ class PluginApp(PluginConfig):
         version = __version__
         category = "PAYMENT"
         picture = "pretix_computop/logo.svg"
-        compatibility = "pretix>=2.7.0"
+        compatibility = "pretix>=2023.7.0"
 
     def ready(self):
         from . import signals  # NOQA
