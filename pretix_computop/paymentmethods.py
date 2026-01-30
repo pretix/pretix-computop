@@ -53,6 +53,7 @@ payment_methods = [
     #     "type": "other",
     #     "public_name": _("SOFORT"),
     #     "verbose_name": _("SOFORT"),
+    #     "retired": True,
     # },
     {
         "method": "giropay",
@@ -60,12 +61,14 @@ payment_methods = [
         "public_name": _("giropay"),
         "verbose_name": _("giropay"),
         "baseclass": ComputopGiropay,
+        "retired": True,
     },
     # {
     #     "method": "paydirekt",
     #     "type": "other",
     #     "public_name": _("paydirekt"),
     #     "verbose_name": _("paydirekt"),
+    #     "retired": True,
     # },
     # {
     #     "method": "Alipay",
@@ -224,6 +227,9 @@ payment_methods = [
 def get_payment_method_classes(brand, payment_methods, baseclass, settingsholder):
     settingsholder.payment_methods_settingsholder = []
     for m in payment_methods:
+        if m.get("retired", False):
+            continue
+
         settingsholder.payment_methods_settingsholder.append(
             (
                 "method_{}".format(m["method"]),
@@ -264,6 +270,7 @@ def get_payment_method_classes(brand, payment_methods, baseclass, settingsholder
                 "public_name": m["public_name"],
                 "method": m["method"],
                 "type": m["type"],
+                "retired": m.get("retired", False),
             },
         )
         for m in payment_methods

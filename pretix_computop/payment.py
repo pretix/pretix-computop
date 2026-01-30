@@ -82,6 +82,7 @@ class ComputopMethod(BasePaymentProvider):
     identifier = ""
     method = ""
     verbose_name = ""
+    retired = False
     apiurl = "https://www.computop-paygate.com/paymentpage.aspx"
 
     def __init__(self, event: Event):
@@ -94,6 +95,9 @@ class ComputopMethod(BasePaymentProvider):
 
     @property
     def is_enabled(self) -> bool:
+        if self.retired:
+            return False
+
         if self.type == "meta":
             module = importlib.import_module(
                 __name__.replace("computop", self.identifier.split("_")[0]).replace(
