@@ -503,3 +503,8 @@ class ComputopCC(ComputopMethod):
 class ComputopGiropay(ComputopMethod):
     apiurl = "https://www.computop-paygate.com/giropay.aspx"
     extra_form_fields = []
+
+
+class ComputopWero(ComputopMethod):
+    apiurl = "https://www.computop-paygate.com/wero.aspx"
+    extra_form_fields = []

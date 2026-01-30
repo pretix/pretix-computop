@@ -1,13 +1,8 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from .payment import (
-    ComputopCC,
-    ComputopEDD,
-    ComputopGiropay,
-    ComputopMethod,
-    ComputopSettingsHolder,
-)
+from .payment import (ComputopCC, ComputopEDD, ComputopGiropay, ComputopMethod,
+                      ComputopSettingsHolder, ComputopWero)
 
 payment_methods = [
     {
@@ -221,6 +216,13 @@ payment_methods = [
     #     "public_name": _("Wechat"),
     #     "verbose_name": _("Wechat"),
     # },
+    {
+        "method": "WERO",
+        "type": "other",
+        "public_name": _("WERO"),
+        "verbose_name": _("WERO"),
+        "baseclass": ComputopWero,
+    }
 ]
 
 
