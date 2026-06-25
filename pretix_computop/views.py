@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.db import transaction
-from django.http import Http404, HttpResponse, HttpResponseServerError
+from django.http import Http404, HttpResponse, HttpResponseServerError, QueryDict
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -87,12 +87,22 @@ class NotifyView(ComputopOrderView, View):
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
-        if request.POST.get("Data"):
+        if request._encoding == "iso-8859-1":
+            # computop sends the following content type with a charset
+            # According to RFC 1866, the "application/x-www-form-urlencoded"
+            # content type does not have a charset and should be always treated
+            # as UTF-8.
+            # Therefore, Django would crash out by default if we call request.POST.
+            # So we parse it manually...
+            data = QueryDict(request.body.decode(request._encoding))
+        else:
+            data = request.POST
+        if data.get("Data"):
             payment = self.get_payment_for_update()
             pprov = payment.payment_provider
 
             try:
-                response = pprov.parse_data(request.POST.get("Data"))
+                response = pprov.parse_data(data.get("Data"))
             except PaymentException:
                 return HttpResponseServerError()
             if pprov.check_hash(response):
