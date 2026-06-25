@@ -1,4 +1,3 @@
-import hashlib
 import importlib
 import logging
 import requests
@@ -256,6 +255,9 @@ class ComputopMethod(BasePaymentProvider):
         return dict(parse_qsl(payload))
 
     def process_result(self, payment_or_refund, data, datasource=None):
+        if data['TransID'] != payment_or_refund.full_id:
+            raise PaymentException(_("We had trouble processing your transaction."))
+
         if datasource:
             payment_or_refund.order.log_action(
                 "pretix_computop.event", data={"source": datasource, "data": data}
@@ -386,7 +388,7 @@ class ComputopMethod(BasePaymentProvider):
             "plugins:pretix_{}:return".format(ident),
             kwargs={
                 "order": payment.order.code,
-                "hash": hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
+                "hash": payment.order.tagged_secret("plugins:pretix_{}:return".format(ident)),
                 "payment": payment.pk,
                 "payment_provider": ident,
             },
@@ -396,7 +398,7 @@ class ComputopMethod(BasePaymentProvider):
             "plugins:pretix_{}:notify".format(ident),
             kwargs={
                 "order": payment.order.code,
-                "hash": hashlib.sha1(payment.order.secret.lower().encode()).hexdigest(),
+                "hash": payment.order.tagged_secret("plugins:pretix_{}:notify".format(ident)),
                 "payment": payment.pk,
                 "payment_provider": ident,
             },
